@@ -3,7 +3,7 @@ import express from "express";
 
 import cors from "cors";
 import helmet from "helmet";
-import { env } from "./cofig/env";
+import { env } from "./config/env";
 import { errorMiddleware } from "./middlewares/error.middleware";
 import { authRouter } from "./modules/auth/auth.routes";
 import { healthRouter } from "./modules/health/health.routes";
@@ -17,7 +17,7 @@ app.use(
     origin:
       env.NODE_ENV === "production"
         ? "https://your-domain.com"
-        : `${process.env.FRONTEND_URL ?? "http://localhost:3000"}`,
+        : `${env.FRONTEND_URL ?? "http://localhost:3000"}`,
     credentials: true,
   }),
 );

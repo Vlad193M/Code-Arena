@@ -1,7 +1,8 @@
 import bcrypt from "bcrypt";
 import { SignJWT } from "jose";
-import { env } from "../../cofig/env";
+import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
+import { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../middlewares/error.middleware";
 import type { AuthResponseDto, RegisterDto } from "./auth.schemas";
 
@@ -14,28 +15,26 @@ const JWT_ALGORITHM = "HS256";
 export async function registerUser(
   registerDto: RegisterDto,
 ): Promise<AuthResponseDto> {
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      OR: [{ email: registerDto.email }, { username: registerDto.username }],
-    },
-  });
-
-  if (existingUser) {
-    throw new AppError(
-      "conflict",
-      "User with this email or username already exists",
-    );
-  }
-
   const hashedPassword = await bcrypt.hash(registerDto.password, SALT_ROUNDS);
 
-  const newUser = await prisma.user.create({
-    data: {
-      username: registerDto.username,
-      email: registerDto.email,
-      password: hashedPassword,
-    },
-  });
+  let newUser;
+  try {
+    newUser = await prisma.user.create({
+      data: {
+        username: registerDto.username,
+        email: registerDto.email,
+        password: hashedPassword,
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      throw new AppError(
+        "conflict",
+        "User with this email or username already exists",
+      );
+    }
+    throw e;
+  }
 
   const token = await new SignJWT({
     userId: newUser.id,

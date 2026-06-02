@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { isHttpError } from "http-errors";
 import { ZodError } from "zod";
-import { env } from "../cofig/env";
+import { env } from "../config/env";
 
 export type ErrorKind =
   | "validation"
