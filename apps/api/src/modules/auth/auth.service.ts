@@ -1,10 +1,15 @@
 import bcrypt from "bcrypt";
-import { SignJWT, type JWTPayload } from "jose";
+import { SignJWT } from "jose";
 import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
 import { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../middlewares/error.middleware";
-import type { AuthResponseDto, LoginDto, RegisterDto } from "./auth.schemas";
+import type {
+  AuthResponseDto,
+  LoginDto,
+  RegisterDto,
+  TokenClaims,
+} from "./auth.schemas";
 
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 
@@ -12,9 +17,12 @@ const SALT_ROUNDS = 10;
 const TOKEN_EXPIRATION = "1h";
 const JWT_ALGORITHM = "HS256";
 
-function signToken<T extends JWTPayload>(payload: T): Promise<string> {
-  return new SignJWT(payload)
+const DUMMY_HASH = bcrypt.hashSync("dummy-password", SALT_ROUNDS);
+
+function signToken(subject: string, claims: TokenClaims): Promise<string> {
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: JWT_ALGORITHM })
+    .setSubject(subject)
     .setIssuedAt()
     .setExpirationTime(TOKEN_EXPIRATION)
     .sign(secret);
@@ -47,8 +55,7 @@ export async function registerUser(
     throw e;
   }
 
-  const token = await signToken({
-    userId: newUser.id,
+  const token = await signToken(newUser.id, {
     email: newUser.email,
     username: newUser.username,
   });
@@ -64,21 +71,16 @@ export async function loginUser(loginDto: LoginDto): Promise<AuthResponseDto> {
     where: { email: loginDto.email },
   });
 
-  if (!user || !user.password) {
-    throw new AppError("unauthorized", "Invalid email or password");
-  }
-
   const isPasswordValid = await bcrypt.compare(
     loginDto.password,
-    user.password,
+    user?.password ?? DUMMY_HASH,
   );
 
-  if (!isPasswordValid) {
+  if (!user || !user.password || !isPasswordValid) {
     throw new AppError("unauthorized", "Invalid email or password");
   }
 
-  const token = await signToken({
-    userId: user.id,
+  const token = await signToken(user.id, {
     email: user.email,
     username: user.username,
   });
