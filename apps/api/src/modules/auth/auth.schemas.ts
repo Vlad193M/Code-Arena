@@ -16,3 +16,14 @@ export const authResponseSchema = z.object({
   }),
 });
 export type AuthResponseDto = z.infer<typeof authResponseSchema>;
+
+export const loginSchema = z.object({
+  email: z.email(),
+  password: z.string().min(1),
+});
+export type LoginDto = z.infer<typeof loginSchema>;
+
+export type TokenClaims = {
+  email: string;
+  username: string;
+};
