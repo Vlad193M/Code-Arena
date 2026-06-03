@@ -16,3 +16,9 @@ export const authResponseSchema = z.object({
   }),
 });
 export type AuthResponseDto = z.infer<typeof authResponseSchema>;
+
+export const loginSchema = z.object({
+  email: z.email(),
+  password: z.string().min(8).max(72),
+});
+export type LoginDto = z.infer<typeof loginSchema>;

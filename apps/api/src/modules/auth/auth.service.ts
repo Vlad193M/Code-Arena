@@ -1,16 +1,24 @@
 import bcrypt from "bcrypt";
-import { SignJWT } from "jose";
+import { SignJWT, type JWTPayload } from "jose";
 import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
 import { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../middlewares/error.middleware";
-import type { AuthResponseDto, RegisterDto } from "./auth.schemas";
+import type { AuthResponseDto, LoginDto, RegisterDto } from "./auth.schemas";
 
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 
 const SALT_ROUNDS = 10;
 const TOKEN_EXPIRATION = "1h";
 const JWT_ALGORITHM = "HS256";
+
+function signToken<T extends JWTPayload>(payload: T): Promise<string> {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: JWT_ALGORITHM })
+    .setIssuedAt()
+    .setExpirationTime(TOKEN_EXPIRATION)
+    .sign(secret);
+}
 
 export async function registerUser(
   registerDto: RegisterDto,
@@ -27,7 +35,10 @@ export async function registerUser(
       },
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
       throw new AppError(
         "conflict",
         "User with this email or username already exists",
@@ -36,18 +47,44 @@ export async function registerUser(
     throw e;
   }
 
-  const token = await new SignJWT({
+  const token = await signToken({
     userId: newUser.id,
     email: newUser.email,
     username: newUser.username,
-  })
-    .setProtectedHeader({ alg: JWT_ALGORITHM })
-    .setIssuedAt()
-    .setExpirationTime(TOKEN_EXPIRATION)
-    .sign(secret);
+  });
 
   return {
     accessToken: token,
     user: { id: newUser.id, username: newUser.username, email: newUser.email },
+  };
+}
+
+export async function loginUser(loginDto: LoginDto): Promise<AuthResponseDto> {
+  const user = await prisma.user.findUnique({
+    where: { email: loginDto.email },
+  });
+
+  if (!user || !user.password) {
+    throw new AppError("unauthorized", "Invalid email or password");
+  }
+
+  const isPasswordValid = await bcrypt.compare(
+    loginDto.password,
+    user.password,
+  );
+
+  if (!isPasswordValid) {
+    throw new AppError("unauthorized", "Invalid email or password");
+  }
+
+  const token = await signToken({
+    userId: user.id,
+    email: user.email,
+    username: user.username,
+  });
+
+  return {
+    accessToken: token,
+    user: { id: user.id, username: user.username, email: user.email },
   };
 }
