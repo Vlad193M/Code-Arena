@@ -27,3 +27,11 @@ export type TokenClaims = {
   email: string;
   username: string;
 };
+
+export const meResponseSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  username: z.string(),
+});
+
+export type MeResponseDto = z.infer<typeof meResponseSchema>;

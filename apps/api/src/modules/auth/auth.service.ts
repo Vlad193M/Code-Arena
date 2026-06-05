@@ -1,32 +1,17 @@
 import bcrypt from "bcrypt";
-import { SignJWT } from "jose";
-import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
 import { Prisma } from "../../generated/prisma/client.js";
+import { signToken } from "../../lib/jwt";
 import { AppError } from "../../middlewares/error.middleware";
 import type {
   AuthResponseDto,
   LoginDto,
+  MeResponseDto,
   RegisterDto,
-  TokenClaims,
 } from "./auth.schemas";
 
-const secret = new TextEncoder().encode(env.JWT_SECRET);
-
 const SALT_ROUNDS = 10;
-const TOKEN_EXPIRATION = "1h";
-const JWT_ALGORITHM = "HS256";
-
 const DUMMY_HASH = bcrypt.hashSync("dummy-password", SALT_ROUNDS);
-
-function signToken(subject: string, claims: TokenClaims): Promise<string> {
-  return new SignJWT(claims)
-    .setProtectedHeader({ alg: JWT_ALGORITHM })
-    .setSubject(subject)
-    .setIssuedAt()
-    .setExpirationTime(TOKEN_EXPIRATION)
-    .sign(secret);
-}
 
 export async function registerUser(
   registerDto: RegisterDto,
@@ -89,4 +74,17 @@ export async function loginUser(loginDto: LoginDto): Promise<AuthResponseDto> {
     accessToken: token,
     user: { id: user.id, username: user.username, email: user.email },
   };
+}
+
+export async function getCurrentUser(userId: string): Promise<MeResponseDto> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, username: true },
+  });
+
+  if (!user) {
+    throw new AppError("not_found", "User not found");
+  }
+
+  return user;
 }
