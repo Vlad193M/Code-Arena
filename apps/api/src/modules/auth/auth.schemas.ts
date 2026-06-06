@@ -7,13 +7,16 @@ export const registerSchema = z.object({
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
+export const userSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  email: z.string(),
+});
+export type User = z.infer<typeof userSchema>;
+
 export const authResponseSchema = z.object({
   accessToken: z.string(),
-  user: z.object({
-    id: z.string(),
-    username: z.string(),
-    email: z.string(),
-  }),
+  user: userSchema,
 });
 export type AuthResponseDto = z.infer<typeof authResponseSchema>;
 
@@ -28,10 +31,6 @@ export type TokenClaims = {
   username: string;
 };
 
-export const meResponseSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  username: z.string(),
-});
+export const meResponseSchema = userSchema;
 
 export type MeResponseDto = z.infer<typeof meResponseSchema>;

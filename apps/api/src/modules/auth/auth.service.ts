@@ -8,6 +8,7 @@ import type {
   LoginDto,
   MeResponseDto,
   RegisterDto,
+  User,
 } from "./auth.schemas";
 
 const SALT_ROUNDS = 10;
@@ -18,7 +19,7 @@ export async function registerUser(
 ): Promise<AuthResponseDto> {
   const hashedPassword = await bcrypt.hash(registerDto.password, SALT_ROUNDS);
 
-  let newUser;
+  let newUser: User;
   try {
     newUser = await prisma.user.create({
       data: {
