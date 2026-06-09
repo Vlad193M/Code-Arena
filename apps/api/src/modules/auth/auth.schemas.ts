@@ -20,6 +20,8 @@ export const authResponseSchema = z.object({
 });
 export type AuthResponseDto = z.infer<typeof authResponseSchema>;
 
+export type AuthResult = AuthResponseDto & { refreshToken: string };
+
 export const loginSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
