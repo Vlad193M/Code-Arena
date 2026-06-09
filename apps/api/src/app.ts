@@ -1,6 +1,7 @@
 import type { Application } from "express";
 import express from "express";
 
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import { env } from "./config/env";
@@ -24,6 +25,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use("/api", healthRouter);
 app.use("/api/auth", authRouter);
