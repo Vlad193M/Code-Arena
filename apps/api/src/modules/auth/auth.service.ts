@@ -1,17 +1,29 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import type { JWTPayload, JWTVerifyResult } from "jose";
+import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
 import { redis } from "../../db/redis.client";
 import { Prisma } from "../../generated/prisma/client.js";
 import { signToken, verifyToken } from "../../lib/jwt";
 import { AppError } from "../../middlewares/error.middleware";
 import {
+  GITHUB_AUTHORIZE_URL,
+  GITHUB_OAUTH_SCOPE,
+  GITHUB_TOKEN_URL,
+  GITHUB_USER_API_URL,
+  GITHUB_USER_EMAILS_API_URL,
   refreshTokenExpiry,
   refreshTokenExpirySeconds,
 } from "./auth.constants";
+import {
+  githubEmailsSchema,
+  githubProfileSchema,
+  githubTokenSchema,
+} from "./auth.schemas";
 import type {
   AuthResult,
+  GithubProfile,
   LoginDto,
   MeResponseDto,
   RegisterDto,
@@ -42,6 +54,184 @@ async function issueRefreshToken(user: {
   return refreshToken;
 }
 
+async function issueAuthResult(user: {
+  id: string;
+  email: string;
+  username: string;
+}): Promise<AuthResult> {
+  const accessToken = await signToken(user.id, {
+    email: user.email,
+    username: user.username,
+  });
+  const refreshToken = await issueRefreshToken(user);
+
+  return {
+    accessToken,
+    refreshToken,
+    user: { id: user.id, username: user.username, email: user.email },
+  };
+}
+
+async function githubFetch(url: string, init?: Parameters<typeof fetch>[1]) {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new AppError("internal", "Failed to reach GitHub");
+  }
+}
+
+export function buildGithubAuthUrl(): { url: string; state: string } {
+  const state = randomUUID();
+  const params = new URLSearchParams({
+    client_id: env.GITHUB_CLIENT_ID,
+    redirect_uri: env.GITHUB_CALLBACK_URL,
+    scope: GITHUB_OAUTH_SCOPE,
+    state,
+  });
+  return { url: `${GITHUB_AUTHORIZE_URL}?${params.toString()}`, state };
+}
+
+async function exchangeGithubCode(code: string): Promise<string> {
+  const response = await githubFetch(GITHUB_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      client_id: env.GITHUB_CLIENT_ID,
+      client_secret: env.GITHUB_CLIENT_SECRET,
+      code,
+      redirect_uri: env.GITHUB_CALLBACK_URL,
+    }),
+  });
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new AppError("unauthorized", "Failed to exchange GitHub code");
+  }
+  const parsed = githubTokenSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new AppError("unauthorized", "Failed to exchange GitHub code");
+  }
+  return parsed.data.access_token;
+}
+
+async function fetchVerifiedEmail(
+  headers: Record<string, string>,
+): Promise<string | null> {
+  const response = await githubFetch(GITHUB_USER_EMAILS_API_URL, { headers });
+  if (!response.ok) {
+    return null;
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return null;
+  }
+  const parsed = githubEmailsSchema.safeParse(body);
+  if (!parsed.success) {
+    return null;
+  }
+  const emails = parsed.data;
+  return (
+    emails.find((e) => e.primary && e.verified)?.email ??
+    emails.find((e) => e.verified)?.email ??
+    null
+  );
+}
+
+async function fetchGithubProfile(
+  githubAccessToken: string,
+): Promise<GithubProfile> {
+  const headers = {
+    Authorization: `Bearer ${githubAccessToken}`,
+    Accept: "application/vnd.github+json",
+    "User-Agent": "CodeArena",
+  };
+
+  const [userResponse, email] = await Promise.all([
+    githubFetch(GITHUB_USER_API_URL, { headers }),
+    fetchVerifiedEmail(headers),
+  ]);
+
+  if (!userResponse.ok) {
+    throw new AppError("unauthorized", "Failed to fetch GitHub profile");
+  }
+  let userBody: unknown;
+  try {
+    userBody = await userResponse.json();
+  } catch {
+    throw new AppError("unauthorized", "Failed to fetch GitHub profile");
+  }
+  const profile = githubProfileSchema.safeParse(userBody);
+  if (!profile.success) {
+    throw new AppError("unauthorized", "Failed to fetch GitHub profile");
+  }
+
+  if (!email) {
+    throw new AppError(
+      "validation",
+      "No verified email found on the GitHub account",
+    );
+  }
+
+  return {
+    githubId: String(profile.data.id),
+    email,
+    login: profile.data.login,
+  };
+}
+
+async function buildUsername(profile: GithubProfile): Promise<string> {
+  const taken = await prisma.user.findUnique({
+    where: { username: profile.login },
+  });
+  return taken ? `${profile.login}-${profile.githubId}` : profile.login;
+}
+
+async function findOrCreateGithubUser(profile: GithubProfile): Promise<User> {
+  const byEmail = await prisma.user.findUnique({
+    where: { email: profile.email },
+  });
+  if (byEmail) {
+    if (byEmail.githubId && byEmail.githubId !== profile.githubId) {
+      throw new AppError(
+        "conflict",
+        "This email is already linked to a different GitHub account",
+      );
+    }
+    if (byEmail.githubId) {
+      return byEmail;
+    }
+    return prisma.user.update({
+      where: { id: byEmail.id },
+      data: { githubId: profile.githubId },
+    });
+  }
+
+  return prisma.user.upsert({
+    where: { githubId: profile.githubId },
+    update: {},
+    create: {
+      githubId: profile.githubId,
+      email: profile.email,
+      username: await buildUsername(profile),
+    },
+  });
+}
+
+export async function loginWithGithub(code: string): Promise<AuthResult> {
+  const githubAccessToken = await exchangeGithubCode(code);
+  const profile = await fetchGithubProfile(githubAccessToken);
+  const user = await findOrCreateGithubUser(profile);
+
+  return issueAuthResult(user);
+}
+
 export async function registerUser(
   registerDto: RegisterDto,
 ): Promise<AuthResult> {
@@ -69,18 +259,7 @@ export async function registerUser(
     throw e;
   }
 
-  const accessToken = await signToken(newUser.id, {
-    email: newUser.email,
-    username: newUser.username,
-  });
-
-  const refreshToken = await issueRefreshToken(newUser);
-
-  return {
-    accessToken,
-    refreshToken,
-    user: { id: newUser.id, username: newUser.username, email: newUser.email },
-  };
+  return issueAuthResult(newUser);
 }
 
 export async function loginUser(loginDto: LoginDto): Promise<AuthResult> {
@@ -97,18 +276,7 @@ export async function loginUser(loginDto: LoginDto): Promise<AuthResult> {
     throw new AppError("unauthorized", "Invalid email or password");
   }
 
-  const accessToken = await signToken(user.id, {
-    email: user.email,
-    username: user.username,
-  });
-
-  const refreshToken = await issueRefreshToken(user);
-
-  return {
-    accessToken,
-    refreshToken,
-    user: { id: user.id, username: user.username, email: user.email },
-  };
+  return issueAuthResult(user);
 }
 
 export async function refreshToken(
@@ -143,18 +311,7 @@ export async function refreshToken(
 
   await redis.del(refreshKey(userId, jti));
 
-  const accessToken = await signToken(user.id, {
-    email: user.email,
-    username: user.username,
-  });
-
-  const newRefreshToken = await issueRefreshToken(user);
-
-  return {
-    accessToken,
-    refreshToken: newRefreshToken,
-    user: { id: user.id, username: user.username, email: user.email },
-  };
+  return issueAuthResult(user);
 }
 
 export async function logout(refreshToken: string) {

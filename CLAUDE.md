@@ -21,6 +21,7 @@ docker compose up -d     # start Postgres
 pnpm db:migrate          # prisma migrate dev --name <name>
 pnpm db:generate         # regenerate client after schema change
 pnpm db:studio
+pnpm typecheck           # tsc --noEmit — run after schema/type changes
 ```
 
 ## Constraints (IMPORTANT)
@@ -29,6 +30,9 @@ pnpm db:studio
 - **Services must not import `req`/`res`** — HTTP stays in controllers.
 - **All Linear content in English.** Our chat is Ukrainian; tickets/docs are English.
 - Do not put business logic in routes or controllers.
+- **Validate every trust boundary with Zod** — not only `req` inputs but also responses from external APIs (e.g. GitHub). Never trust a TS `as` cast for data crossing the boundary.
+- **Keep comments minimal** — let names and types document the code. When a doc comment is warranted, use TSDoc (`/** */`), not narrative `//` blocks.
+- **Prefer DB-level atomicity** (`upsert` / `INSERT ... ON CONFLICT`) over app-level check-then-create with retry loops.
 
 ## Layout
 
@@ -37,6 +41,8 @@ pnpm monorepo: `apps/api` (Express backend), `apps/web` (React frontend), `packa
 Backend is modular — each feature is a folder under `src/modules/<feature>/` with four files: `.routes.ts` (URLs, thin), `.controller.ts` (HTTP layer), `.service.ts` (logic + DB), `.schemas.ts` (Zod). Shared pieces: `config/env.ts` (Zod-validated env), `db/prisma.client.ts` (singleton), `lib/` (cross-feature utils), `middlewares/error.middleware.ts` (`AppError` + global handler). `app.ts` configures Express; `server.ts` only listens.
 
 File naming: `<feature>.<role>.ts`.
+
+Non-obvious feature flows get a short doc in `apps/api/docs/<feature>.md` (see `github-oauth.md`). Diagrams in Mermaid, English, self-contained — no internal shorthand.
 
 ## Project-specific gotchas
 

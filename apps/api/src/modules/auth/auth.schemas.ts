@@ -28,6 +28,35 @@ export const loginSchema = z.object({
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 
+export const githubCallbackSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+export type GithubCallbackDto = z.infer<typeof githubCallbackSchema>;
+
+export type GithubProfile = {
+  githubId: string;
+  email: string;
+  login: string;
+};
+
+export const githubTokenSchema = z.object({
+  access_token: z.string(),
+});
+
+export const githubProfileSchema = z.object({
+  id: z.number(),
+  login: z.string(),
+});
+
+export const githubEmailsSchema = z.array(
+  z.object({
+    email: z.string(),
+    primary: z.boolean(),
+    verified: z.boolean(),
+  }),
+);
+
 export type TokenClaims = {
   email: string;
   username: string;

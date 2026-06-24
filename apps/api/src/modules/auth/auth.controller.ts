@@ -1,9 +1,13 @@
 import type { Request, Response } from "express";
 import { env } from "../../config/env";
 import { AppError } from "../../middlewares/error.middleware";
-import { refreshTokenExpirySeconds } from "./auth.constants";
+import {
+  oauthStateCookieMaxAge,
+  refreshTokenExpirySeconds,
+} from "./auth.constants";
 import {
   authResponseSchema,
+  githubCallbackSchema,
   loginSchema,
   meResponseSchema,
   registerSchema,
@@ -17,6 +21,33 @@ function setRefreshTokenCookie(res: Response, refreshToken: string) {
     sameSite: "strict",
     maxAge: refreshTokenExpirySeconds * 1000, // 14 days in milliseconds
   });
+}
+
+export function githubAuth(_req: Request, res: Response) {
+  const { url, state } = AuthService.buildGithubAuthUrl();
+
+  res.cookie("oauth_state", state, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: oauthStateCookieMaxAge,
+  });
+
+  res.redirect(url);
+}
+
+export async function githubCallback(req: Request, res: Response) {
+  const { code, state } = githubCallbackSchema.parse(req.body);
+
+  const savedState = req.cookies.oauth_state;
+  res.clearCookie("oauth_state");
+  if (!savedState || savedState !== state) {
+    throw new AppError("unauthorized", "Invalid OAuth state");
+  }
+
+  const { refreshToken, ...response } = await AuthService.loginWithGithub(code);
+  setRefreshTokenCookie(res, refreshToken);
+  res.json(authResponseSchema.parse(response));
 }
 
 export async function register(req: Request, res: Response) {
