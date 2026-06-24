@@ -12,6 +12,9 @@ const envSchema = z.object({
     .string()
     .min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
+  GITHUB_CLIENT_ID: z.string().min(1, "GITHUB_CLIENT_ID is required"),
+  GITHUB_CLIENT_SECRET: z.string().min(1, "GITHUB_CLIENT_SECRET is required"),
+  GITHUB_CALLBACK_URL: z.string().url(),
 });
 
 const parsed = envSchema.safeParse(process.env);
