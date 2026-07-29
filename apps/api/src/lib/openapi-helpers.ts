@@ -1,5 +1,8 @@
 import type { ZodType } from "zod";
-import type { ZodOpenApiResponseObject } from "zod-openapi";
+import type {
+  ZodOpenApiRequestBodyObject,
+  ZodOpenApiResponseObject,
+} from "zod-openapi";
 import {
   errorSchema,
   KIND_TO_STATUS,
@@ -8,7 +11,7 @@ import {
 } from "../middlewares/error.middleware";
 
 /** Wraps a schema as a JSON request body. */
-export const jsonBody = (schema: ZodType) => ({
+export const jsonBody = (schema: ZodType): ZodOpenApiRequestBodyObject => ({
   content: { "application/json": { schema } },
 });
 

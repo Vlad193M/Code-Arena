@@ -70,8 +70,10 @@ export const errorMiddleware = (
   }
 
   if (err instanceof ZodError) {
-    // `details` is Zod's own issue list (already shaped like ValidationError);
-    // its `path: PropertyKey[]` can't narrow to the JSON-serializable schema type.
+    /**
+     * `details` is Zod's own issue list, already shaped like ValidationError;
+     * its `path: PropertyKey[]` can't narrow to the JSON-serializable schema type.
+     */
     res.status(400).json({ error: "Validation error", details: err.issues });
     return;
   }
