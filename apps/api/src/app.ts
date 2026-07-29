@@ -7,6 +7,7 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { errorMiddleware } from "./middlewares/error.middleware";
 import { authRouter } from "./modules/auth/auth.routes";
+import { docsRouter } from "./modules/docs/docs.routes";
 import { healthRouter } from "./modules/health/health.routes";
 
 export const app: Application = express();
@@ -18,7 +19,7 @@ app.use(
     origin:
       env.NODE_ENV === "production"
         ? "https://your-domain.com"
-        : `${env.FRONTEND_URL ?? "http://localhost:3000"}`,
+        : [env.FRONTEND_URL, `http://localhost:${env.PORT}`],
     credentials: true,
   }),
 );
@@ -28,6 +29,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use("/api", healthRouter);
+app.use("/api", docsRouter);
 app.use("/api/auth", authRouter);
 
 app.use(errorMiddleware);
