@@ -1,10 +1,12 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 :root {
@@ -259,3 +261,116 @@ a {
   }
 }
 
+
+/* ── CRT terminal (auth screens) ────────────────────────────────────────── */
+
+.crt {
+  --crt-bg: #1c1810;
+  --crt-amber: #ffb000;
+  --crt-amber-bright: #ffd479;
+  --crt-dim: #7a5c38;
+  --crt-green: #33ff66;
+  --crt-red: #ff4444;
+
+  color: var(--crt-amber);
+  color-scheme: dark;
+}
+
+.crt ::placeholder {
+  color: var(--crt-dim);
+}
+
+.crt a {
+  color: var(--crt-amber);
+  text-decoration: none;
+}
+
+.crt a:hover {
+  color: var(--crt-amber-bright);
+}
+
+.crt-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.32) 0px,
+    rgba(0, 0, 0, 0.32) 1px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) 3px
+  );
+}
+
+.crt-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 50% 45%,
+    rgba(255, 176, 0, 0.05) 0%,
+    rgba(28, 24, 16, 0) 55%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+.crt-edge {
+  background: linear-gradient(to bottom, rgba(255, 176, 0, 0.85), rgba(255, 176, 0, 0.55));
+  box-shadow: 0 0 10px rgba(255, 176, 0, 0.25);
+}
+
+.crt-glow {
+  text-shadow: 0 0 10px rgba(255, 176, 0, 0.4);
+}
+
+.crt-glow-green {
+  text-shadow: 0 0 9px rgba(51, 255, 102, 0.45);
+}
+
+.crt-glow-red {
+  text-shadow: 0 0 10px rgba(255, 68, 68, 0.45);
+}
+
+.crt-blink {
+  animation: crt-blink 1s step-end infinite;
+}
+
+.crt-ellipsis::after {
+  content: "";
+  animation: crt-ellipsis 1.2s steps(1, end) infinite;
+}
+
+@keyframes crt-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes crt-ellipsis {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-blink,
+  .crt-ellipsis::after {
+    animation: none;
+  }
+}
