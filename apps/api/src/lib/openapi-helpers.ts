@@ -8,7 +8,7 @@ import {
   KIND_TO_STATUS,
   validationErrorSchema,
   type ErrorKind,
-} from "../middlewares/error.middleware";
+} from "./errors";
 
 /** Wraps a schema as a JSON request body. */
 export const jsonBody = (schema: ZodType): ZodOpenApiRequestBodyObject => ({

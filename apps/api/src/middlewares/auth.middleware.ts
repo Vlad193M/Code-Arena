@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { verifyToken } from "../lib/jwt";
-import { AppError } from "./error.middleware";
+import { AppError } from "../lib/errors";
 
 export async function authenticateMiddleware(
   req: Request,

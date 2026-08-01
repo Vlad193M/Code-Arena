@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { env } from "../../config/env";
-import { AppError } from "../../middlewares/error.middleware";
+import { AppError } from "../../lib/errors";
 import {
   oauthStateCookieMaxAge,
   refreshTokenExpirySeconds,
