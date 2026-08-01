@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"pnpm --filter api dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter api build && pnpm --filter web build",
+    "gen:api": "pnpm --filter api openapi:dump && pnpm --filter web gen:api",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
