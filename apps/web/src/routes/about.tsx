@@ -1,23 +1,37 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 
-export const Route = createFileRoute('/about')({
+export const Route = createFileRoute("/about")({
+  server: {
+    handlers: {
+      GET: async () => {
+        return Response.json({ message: "Hello1111" });
+      },
+    },
+  },
   component: About,
-})
+});
 
 function About() {
+  const [reply, setReply] = useState("");
+
   return (
-    <main className="page-wrap px-4 py-12">
-      <section className="island-shell rounded-2xl p-6 sm:p-8">
-        <p className="island-kicker mb-2">About</p>
-        <h1 className="display-title mb-3 text-4xl font-bold text-[var(--sea-ink)] sm:text-5xl">
-          A small starter with room to grow.
-        </h1>
-        <p className="m-0 max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
-          TanStack Start gives you type-safe routing, server functions, and
-          modern SSR defaults. Use this as a clean foundation, then layer in
-          your own routes, styling, and add-ons.
-        </p>
-      </section>
+    <main className="p-10">
+      <button
+        className="bg-blue-500 text-white p-2 rounded"
+        onClick={() => {
+          // This button manually fetches its own route's POST handler!
+          fetch("/about", {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: "TanStacker" }),
+          })
+            .then((res) => res.json())
+            .then((data) => setReply(data.message));
+        }}
+      >
+        Say Hello {reply && `- ${reply}`}
+      </button>
     </main>
-  )
+  );
 }
