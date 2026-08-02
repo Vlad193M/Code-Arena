@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
-    "gen:api": "openapi-typescript http://localhost:8000/api/openapi.json -o src/api/schema.d.ts",
+    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -43,11 +43,5 @@
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
     "vitest": "^4.1.5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "lightningcss"
-    ]
   }
 }

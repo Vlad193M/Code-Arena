@@ -5,8 +5,8 @@ import { env } from "../../config/env";
 import { prisma } from "../../db/prisma.client";
 import { redis } from "../../db/redis.client";
 import { Prisma } from "../../generated/prisma/client.js";
+import { AppError } from "../../lib/errors";
 import { signToken, verifyToken } from "../../lib/jwt";
-import { AppError } from "../../middlewares/error.middleware";
 import {
   GITHUB_AUTHORIZE_URL,
   GITHUB_OAUTH_SCOPE,
