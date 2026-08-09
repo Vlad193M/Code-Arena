@@ -1,3 +1,10 @@
+import {
+  authResponseSchema,
+  githubCallbackSchema,
+  loginSchema,
+  meResponseSchema,
+  registerSchema,
+} from "@codearena/shared";
 import type { Request, Response } from "express";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
@@ -5,13 +12,6 @@ import {
   oauthStateCookieMaxAge,
   refreshTokenExpirySeconds,
 } from "./auth.constants";
-import {
-  authResponseSchema,
-  githubCallbackSchema,
-  loginSchema,
-  meResponseSchema,
-  registerSchema,
-} from "./auth.schemas";
 import * as AuthService from "./auth.service";
 
 function setRefreshTokenCookie(res: Response, refreshToken: string) {

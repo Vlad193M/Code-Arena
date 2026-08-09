@@ -1,5 +1,3 @@
-import type { ZodOpenApiPathsObject } from "zod-openapi";
-import { errors, jsonBody, jsonResponse } from "../../lib/openapi-helpers";
 import {
   authResponseSchema,
   githubCallbackSchema,
@@ -7,7 +5,9 @@ import {
   meResponseSchema,
   messageResponseSchema,
   registerSchema,
-} from "./auth.schemas";
+} from "@codearena/shared";
+import type { ZodOpenApiPathsObject } from "zod-openapi";
+import { errors, jsonBody, jsonResponse } from "../../lib/openapi-helpers";
 
 export const authPaths: ZodOpenApiPathsObject = {
   "/api/auth/github": {
