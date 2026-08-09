@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import type {
+  LoginDto,
+  MeResponseDto,
+  RegisterDto,
+  User,
+} from "@codearena/shared";
 import bcrypt from "bcrypt";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { env } from "../../config/env";
@@ -21,14 +27,7 @@ import {
   githubProfileSchema,
   githubTokenSchema,
 } from "./auth.schemas";
-import type {
-  AuthResult,
-  GithubProfile,
-  LoginDto,
-  MeResponseDto,
-  RegisterDto,
-  User,
-} from "./auth.schemas";
+import type { AuthResult, GithubProfile } from "./auth.schemas";
 
 const SALT_ROUNDS = 10;
 const DUMMY_HASH = bcrypt.hashSync("dummy-password", SALT_ROUNDS);
