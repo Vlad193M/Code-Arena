@@ -28,6 +28,15 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
+  errorComponent: ({ error }) => {
+    console.error("[root] uncaught route error", error);
+
+    return (
+      <pre style={{ padding: 24, color: "#f44", whiteSpace: "pre-wrap" }}>
+        {String(error?.message ?? error)}
+      </pre>
+    );
+  },
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {

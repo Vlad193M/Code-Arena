@@ -1,31 +1,91 @@
+import { apiClient } from "#/api/client";
+import { loginSchema } from "@codearena/shared";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-
-import { Link } from "@tanstack/react-router";
+import { toApiErrorMessage, toThrownErrorMessage } from "../errors";
+import { check, missing } from "../checks";
+import { setSession } from "../store";
+import GithubAuthButton from "./GithubAuthButton";
 import TerminalAlert from "./TerminalAlert";
 import TerminalButton from "./TerminalButton";
+import type { TerminalCheck } from "./TerminalChecks";
 import TerminalField from "./TerminalField";
 import TerminalFrame from "./TerminalFrame";
 
-export type LoginValues = {
-  email: string;
-  password: string;
-};
+const field = loginSchema.shape;
+
+function emailChecks(value: string, tried: boolean): Array<TerminalCheck> {
+  if (!value) return tried ? missing("email") : [];
+
+  return [
+    check(
+      field.email.safeParse(value).success,
+      "email format OK",
+      "invalid email format",
+    ),
+  ];
+}
+
+/** Any non-empty password satisfies the schema, so only absence is worth saying. */
+function passwordChecks(value: string, tried: boolean): Array<TerminalCheck> {
+  return !value && tried ? missing("password") : [];
+}
 
 type LoginScreenProps = {
-  onSubmit?: (values: LoginValues) => void;
-  onGithubLogin?: () => void;
-  pending?: boolean;
-  error?: string | null;
+  githubError?: string;
 };
 
-export default function LoginScreen({
-  onSubmit,
-  onGithubLogin,
-  pending = false,
-  error = null,
-}: LoginScreenProps) {
+export default function LoginScreen({ githubError }: LoginScreenProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [tried, setTried] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  const valid = loginSchema.safeParse({ email, password }).success;
+
+  async function handleEmailLogin(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+
+    if (githubError) {
+      navigate({ to: "/login", search: {}, replace: true });
+    }
+    setTried(true);
+
+    if (!valid) {
+      return;
+    }
+
+    setFormError("");
+    setPending(true);
+
+    try {
+      const { error, data } = await apiClient.POST("/api/auth/login", {
+        body: {
+          email,
+          password,
+        },
+      });
+
+      if (error) {
+        setFormError(toApiErrorMessage(error));
+        return;
+      }
+
+      setSession(data);
+    } catch (cause) {
+      setFormError(toThrownErrorMessage(cause));
+      return;
+    } finally {
+      setPending(false);
+    }
+
+    navigate({ to: "/" });
+  }
+
+  const errorMessage = formError || githubError;
 
   return (
     <TerminalFrame
@@ -49,13 +109,7 @@ export default function LoginScreen({
         </>
       }
     >
-      <form
-        className="flex flex-col gap-6.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit?.({ email, password });
-        }}
-      >
+      <form className="flex flex-col gap-6.5" onSubmit={handleEmailLogin}>
         <div className="flex flex-col gap-5">
           <TerminalField
             label="EMAIL:"
@@ -65,6 +119,8 @@ export default function LoginScreen({
             value={email}
             onChange={setEmail}
             disabled={pending}
+            checks={emailChecks(email, tried)}
+            submitted={tried}
           />
 
           <div className="flex flex-col gap-[7px]">
@@ -77,6 +133,8 @@ export default function LoginScreen({
               value={password}
               onChange={setPassword}
               disabled={pending}
+              checks={passwordChecks(password, tried)}
+              submitted={tried}
             />
             <div className="flex justify-end">
               <Link
@@ -90,7 +148,13 @@ export default function LoginScreen({
           </div>
         </div>
 
-        {error ? <TerminalAlert tone="error">{error}</TerminalAlert> : null}
+        {errorMessage ? (
+          <TerminalAlert tone="error">{errorMessage}</TerminalAlert>
+        ) : tried && !valid ? (
+          <TerminalAlert tone="error">
+            LOGIN HALTED: fix the errors listed above
+          </TerminalAlert>
+        ) : null}
 
         <div className="flex flex-col gap-4">
           <TerminalButton
@@ -105,15 +169,11 @@ export default function LoginScreen({
             <span className="h-px flex-1 bg-[rgba(122,92,56,0.6)]" />
           </div>
 
-          <button
-            type="button"
+          <GithubAuthButton
+            command="run github_auth.exe"
+            returnTo="/login"
             disabled={pending}
-            onClick={onGithubLogin}
-            className="flex min-h-[50px] w-full cursor-pointer items-center gap-2.5 border border-dashed border-(--crt-dim) bg-transparent px-3.5 text-left font-[inherit] text-sm tracking-[0.04em] text-(--crt-amber) transition-colors duration-150 hover:border-(--crt-amber) hover:bg-[rgba(255,176,0,0.06)] disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            <span className="text-(--crt-dim)">{"C:\\CODEARENA>"}</span>
-            <span>run github_auth.exe</span>
-          </button>
+          />
         </div>
       </form>
     </TerminalFrame>
