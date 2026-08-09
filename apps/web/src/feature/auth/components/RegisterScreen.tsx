@@ -1,86 +1,115 @@
-import { Link } from "@tanstack/react-router";
+import { apiClient } from "#/api/client";
+import { AUTH_LIMITS, registerSchema } from "@codearena/shared";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toApiErrorMessage, toThrownErrorMessage } from "../errors";
+import { check, missing } from "../checks";
+import { setSession } from "../store";
+import GithubAuthButton from "./GithubAuthButton";
 import TerminalAlert from "./TerminalAlert";
 import TerminalButton from "./TerminalButton";
 import type { TerminalCheck } from "./TerminalChecks";
 import TerminalField from "./TerminalField";
 import TerminalFrame from "./TerminalFrame";
 
-export type RegisterValues = {
-  email: string;
-  username: string;
-  password: string;
-};
+const field = registerSchema.shape;
+
+function emailChecks(value: string, tried: boolean): Array<TerminalCheck> {
+  if (!value) return tried ? missing("email") : [];
+
+  return [
+    check(
+      field.email.safeParse(value).success,
+      "email format OK",
+      "invalid email format",
+    ),
+  ];
+}
+
+function usernameChecks(value: string, tried: boolean): Array<TerminalCheck> {
+  if (!value) return tried ? missing("handle") : [];
+
+  const { min, max } = AUTH_LIMITS.username;
+  return [
+    check(
+      field.username.safeParse(value).success,
+      "handle length OK",
+      `${min}-${max} characters`,
+    ),
+  ];
+}
+
+function passwordChecks(value: string, tried: boolean): Array<TerminalCheck> {
+  if (!value) return tried ? missing("password") : [];
+
+  const { min, max } = AUTH_LIMITS.password;
+  return [
+    check(
+      field.password.safeParse(value).success,
+      `${min}+ characters`,
+      value.length < min
+        ? `too short — ${min} characters minimum`
+        : `too long — ${max} characters maximum`,
+    ),
+  ];
+}
 
 type RegisterScreenProps = {
-  onSubmit?: (values: RegisterValues) => void;
-  pending?: boolean;
-  error?: string | null;
+  githubError?: string;
 };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
-const USERNAME_PATTERN = /^[a-z0-9_]{3,16}$/i;
-
-function check(ok: boolean, okText: string, badText: string): TerminalCheck {
-  return { ok, text: ok ? okText : badText };
-}
-
-/** TODO(COD-17): derive these from the shared Zod/OpenAPI rules instead of local regexes. */
-function emailChecks(value: string): Array<TerminalCheck> {
-  if (!value) return [];
-  return [
-    check(EMAIL_PATTERN.test(value), "email format OK", "invalid email format"),
-  ];
-}
-
-function usernameChecks(value: string): Array<TerminalCheck> {
-  if (!value) return [];
-  return [
-    check(
-      USERNAME_PATTERN.test(value),
-      "handle available",
-      "3-16 chars: a-z 0-9 _ only",
-    ),
-  ];
-}
-
-function passwordChecks(value: string): Array<TerminalCheck> {
-  if (!value) return [];
-  return [
-    check(
-      value.length >= 8,
-      "8+ characters",
-      "too short — 8 characters minimum",
-    ),
-    check(
-      /[0-9]/.test(value) && /[^a-z0-9]/i.test(value),
-      "contains number + symbol",
-      "add a number and a symbol",
-    ),
-  ];
-}
-
-export default function RegisterScreen({
-  onSubmit,
-  pending = false,
-  error = null,
-}: RegisterScreenProps) {
+export default function RegisterScreen({ githubError }: RegisterScreenProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [tried, setTried] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  const fieldChecks = [
-    emailChecks(email),
-    usernameChecks(username),
-    passwordChecks(password),
-  ];
-  const valid =
-    EMAIL_PATTERN.test(email) &&
-    USERNAME_PATTERN.test(username) &&
-    fieldChecks[2].length > 0 &&
-    fieldChecks[2].every((line) => line.ok);
+  const valid = registerSchema.safeParse({ email, username, password }).success;
+  const errorMessage = error || githubError;
 
+  async function handleRegister(event: React.SubmitEvent) {
+    event.preventDefault();
+    if (pending) return;
+
+    if (githubError) {
+      navigate({ to: "/register", search: {}, replace: true });
+    }
+    setTried(true);
+
+    if (!valid) {
+      return;
+    }
+
+    setError("");
+    setPending(true);
+
+    try {
+      const { error, data } = await apiClient.POST("/api/auth/register", {
+        body: {
+          email,
+          password,
+          username,
+        },
+      });
+
+      if (error) {
+        setError(toApiErrorMessage(error));
+        return;
+      }
+
+      setSession(data);
+    } catch (cause) {
+      setError(toThrownErrorMessage(cause));
+      return;
+    } finally {
+      setPending(false);
+    }
+
+    navigate({ to: "/" });
+  }
   return (
     <TerminalFrame
       title="CREATE ACCOUNT"
@@ -100,16 +129,7 @@ export default function RegisterScreen({
         </>
       }
     >
-      <form
-        className="flex flex-col gap-6.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setTried(true);
-          if (valid) {
-            onSubmit?.({ email, username, password });
-          }
-        }}
-      >
+      <form className="flex flex-col gap-6.5" onSubmit={handleRegister}>
         <div className="flex flex-col gap-5">
           <TerminalField
             label="EMAIL:"
@@ -119,7 +139,8 @@ export default function RegisterScreen({
             value={email}
             onChange={setEmail}
             disabled={pending}
-            checks={fieldChecks[0]}
+            checks={emailChecks(email, tried)}
+            submitted={tried}
           />
           <TerminalField
             label="USERNAME:"
@@ -128,7 +149,8 @@ export default function RegisterScreen({
             value={username}
             onChange={setUsername}
             disabled={pending}
-            checks={fieldChecks[1]}
+            checks={usernameChecks(username, tried)}
+            submitted={tried}
           />
           <TerminalField
             label="PASSWORD:"
@@ -139,18 +161,33 @@ export default function RegisterScreen({
             value={password}
             onChange={setPassword}
             disabled={pending}
-            checks={fieldChecks[2]}
+            checks={passwordChecks(password, tried)}
+            submitted={tried}
           />
         </div>
 
-        <TerminalButton
-          label="CREATE ACCOUNT"
-          pending={pending}
-          pendingLabel="CREATING"
-        />
+        <div className="flex flex-col gap-4">
+          <TerminalButton
+            label="CREATE ACCOUNT"
+            pending={pending}
+            pendingLabel="CREATING"
+          />
 
-        {error ? (
-          <TerminalAlert tone="error">{error}</TerminalAlert>
+          <div className="flex items-center gap-3 text-xs tracking-[0.1em] text-(--crt-dim)">
+            <span className="h-px flex-1 bg-[rgba(122,92,56,0.6)]" />
+            <span>OR</span>
+            <span className="h-px flex-1 bg-[rgba(122,92,56,0.6)]" />
+          </div>
+
+          <GithubAuthButton
+            command="run github_signup.exe"
+            returnTo="/register"
+            disabled={pending}
+          />
+        </div>
+
+        {errorMessage ? (
+          <TerminalAlert tone="error">{errorMessage}</TerminalAlert>
         ) : tried && !valid ? (
           <TerminalAlert tone="error">
             REGISTRATION HALTED: fix the errors listed above
