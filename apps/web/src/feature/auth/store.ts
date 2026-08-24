@@ -60,7 +60,8 @@ export function getAuthState(): AuthState {
   return state;
 }
 
-function subscribe(listener: () => void) {
+/** Also drives non-React consumers, e.g. the socket bridge in `api/socket.ts`. */
+export function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);

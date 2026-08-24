@@ -12,10 +12,7 @@ async function start() {
 
     const httpServer = createServer(app);
     createWebSocketServer(httpServer);
-    const io = getWebSocket();
-    io.on("connection", (socket)=> {
-      console.log("connected", socket.id)
-    })
+
     httpServer.listen(env.PORT, () => {
       console.log(`🚀 Server running on port ${env.PORT}`);
     });

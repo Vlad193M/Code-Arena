@@ -2,7 +2,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import { getAuthState } from "#/feature/auth/store";
+import { startSocketBridge } from "#/api/socket";
 import { useEffect } from "react";
 import appCss from "../styles.css?url";
 
@@ -42,6 +42,10 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    startSocketBridge();
+  }, []);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

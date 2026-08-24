@@ -1,9 +1,8 @@
 import { apiClient } from "#/api/client";
 import { requireUser } from "#/feature/auth/guards";
-import { clearSession, getAuthState, useAuth } from "#/feature/auth/store";
+import { clearSession, useAuth } from "#/feature/auth/store";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -30,20 +29,6 @@ function App() {
       await navigate({ to: "/login", replace: true });
     }
   }
-
-  useEffect(() => {
-    console.log(getAuthState().accessToken);
-    const socket = io(import.meta.env.VITE_API_URL, {
-      auth: (cb) => {
-        cb({ accessToken: getAuthState().accessToken });
-      },
-    });
-
-    socket.on("connect", () => console.log("[ws] connected", socket.id));
-    socket.on("connect_error", (err) =>
-      console.log("[ws] error", err.message, err),
-    );
-  }, []);
 
   return (
     <main className="page-wrap px-4 pb-8 pt-14">

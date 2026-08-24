@@ -53,6 +53,14 @@ export function createWebSocketServer(httpServer: HttpServer): AppSocketServer {
     }
   });
 
+  io.on("connection", (socket) => {
+    console.log(`🔌 Socket ${socket.id} connected (user ${socket.data.userId})`);
+
+    socket.on("disconnect", (reason) => {
+      console.log(`🔌 Socket ${socket.id} disconnected: ${reason}`);
+    });
+  });
+
   return io;
 }
 
