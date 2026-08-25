@@ -1,5 +1,5 @@
 import { ensureRefreshed } from "#/api/client";
-import { clearSession, getAuthState, subscribe } from "#/feature/auth/store";
+import { getAuthState, subscribe } from "#/feature/auth/store";
 import { type Socket, io } from "socket.io-client";
 import { z } from "zod";
 
@@ -70,15 +70,11 @@ async function handleConnectError(error: Error) {
     console.error("[ws] token refresh failed", cause);
   }
 
-  // Logout can land while the refresh is in flight.
-  if (getAuthState().status !== "authenticated") return;
+  // A failed refresh has already cleared the session; logout can also land
+  // while it is in flight. Either way the socket does not decide that itself.
+  if (!refreshed || getAuthState().status !== "authenticated") return;
 
-  if (refreshed) {
-    instance.connect();
-    return;
-  }
-
-  clearSession();
+  instance.connect();
 }
 
 /** Auth owns the connection: authenticated means connected. */
