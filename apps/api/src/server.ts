@@ -2,7 +2,7 @@ import { createServer } from "http";
 import { app } from "./app";
 import { env } from "./config/env";
 import { redis } from "./db/redis.client";
-import { createWebSocketServer, getWebSocket } from "./lib/socket";
+import { createWebSocketServer } from "./lib/socket";
 
 async function start() {
   try {
