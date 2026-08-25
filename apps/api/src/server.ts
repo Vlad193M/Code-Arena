@@ -1,6 +1,8 @@
+import { createServer } from "http";
 import { app } from "./app";
 import { env } from "./config/env";
 import { redis } from "./db/redis.client";
+import { createWebSocketServer } from "./lib/socket";
 
 async function start() {
   try {
@@ -8,7 +10,10 @@ async function start() {
     const pong = await redis.ping();
     console.log(`✅ Redis connected and ping successful answer: ${pong}`);
 
-    app.listen(env.PORT, () => {
+    const httpServer = createServer(app);
+    createWebSocketServer(httpServer);
+
+    httpServer.listen(env.PORT, () => {
       console.log(`🚀 Server running on port ${env.PORT}`);
     });
   } catch (err) {

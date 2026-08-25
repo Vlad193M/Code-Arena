@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import type { JWTPayload, JWTVerifyResult } from "jose";
-import { verifyToken } from "../lib/jwt";
 import { AppError } from "../lib/errors";
+import { authenticateToken } from "../lib/jwt";
 
 export async function authenticateMiddleware(
   req: Request,
@@ -15,19 +14,6 @@ export async function authenticateMiddleware(
     throw new AppError("unauthorized", "No token provided");
   }
 
-  let decoded: JWTVerifyResult<JWTPayload>;
-
-  try {
-    decoded = await verifyToken(token);
-  } catch (error) {
-    throw new AppError("unauthorized", "Invalid token");
-  }
-
-  const { sub } = decoded.payload;
-  if (typeof sub !== "string") {
-    throw new AppError("unauthorized", "Invalid token payload");
-  }
-
-  req.user = { id: sub };
+  req.user = { id: await authenticateToken(token) };
   next();
 }
