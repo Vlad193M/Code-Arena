@@ -19,4 +19,30 @@ model User {
   username String @unique
   password String?
   createdAt DateTime @default(now())
+  hostedMatches Match[] @relation("MatchHost")
+  joinedMatches Match[] @relation("MatchGuest")
+}
+
+enum MatchStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+model Match {
+  id     String      @id @default(cuid())
+  status MatchStatus @default(WAITING)
+
+  hostId String
+  host   User   @relation("MatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+
+  guestId String?
+  guest   User?   @relation("MatchGuest", fields: [guestId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  @@index([status, createdAt])
 }
