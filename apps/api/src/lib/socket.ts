@@ -1,3 +1,7 @@
+import type {
+  LobbyClientToServerEvents,
+  LobbyServerToClientEvents,
+} from "@codearena/shared";
 import type { Server as HttpServer } from "http";
 import type { DefaultEventsMap, ExtendedError } from "socket.io";
 import { Server as WebSocketServer } from "socket.io";
@@ -11,8 +15,8 @@ interface SocketData {
 }
 
 export type AppSocketServer = WebSocketServer<
-  DefaultEventsMap,
-  DefaultEventsMap,
+  LobbyClientToServerEvents,
+  LobbyServerToClientEvents,
   DefaultEventsMap,
   SocketData
 >;
