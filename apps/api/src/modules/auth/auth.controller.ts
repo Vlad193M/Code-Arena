@@ -8,6 +8,8 @@ import {
 import type { Request, Response } from "express";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
+import { serialize } from "../../lib/serialize";
+import { requireUserId } from "../../middlewares/auth.middleware";
 import {
   oauthStateCookieMaxAge,
   refreshTokenExpirySeconds,
@@ -47,21 +49,21 @@ export async function githubCallback(req: Request, res: Response) {
 
   const { refreshToken, ...response } = await AuthService.loginWithGithub(code);
   setRefreshTokenCookie(res, refreshToken);
-  res.json(authResponseSchema.parse(response));
+  res.json(serialize(authResponseSchema, response));
 }
 
 export async function register(req: Request, res: Response) {
   const data = registerSchema.parse(req.body);
   const { refreshToken, ...response } = await AuthService.registerUser(data);
   setRefreshTokenCookie(res, refreshToken);
-  res.status(201).json(authResponseSchema.parse(response));
+  res.status(201).json(serialize(authResponseSchema, response));
 }
 
 export async function login(req: Request, res: Response) {
   const data = loginSchema.parse(req.body);
   const { refreshToken, ...response } = await AuthService.loginUser(data);
   setRefreshTokenCookie(res, refreshToken);
-  res.status(200).json(authResponseSchema.parse(response));
+  res.status(200).json(serialize(authResponseSchema, response));
 }
 
 export async function refresh(req: Request, res: Response) {
@@ -74,7 +76,7 @@ export async function refresh(req: Request, res: Response) {
   const { refreshToken: newRefreshToken, ...response } =
     await AuthService.refreshToken(refreshToken);
   setRefreshTokenCookie(res, newRefreshToken);
-  res.json(authResponseSchema.parse(response));
+  res.json(serialize(authResponseSchema, response));
 }
 
 export async function logout(req: Request, res: Response) {
@@ -93,11 +95,7 @@ export async function logout(req: Request, res: Response) {
 }
 
 export async function me(req: Request, res: Response) {
-  const user = req.user;
-  if (!user) {
-    throw new AppError("unauthorized", "User not authenticated");
-  }
-  const userData = await AuthService.getCurrentUser(user.id);
+  const userData = await AuthService.getCurrentUser(requireUserId(req));
 
-  res.json(meResponseSchema.parse(userData));
+  res.json(serialize(meResponseSchema, userData));
 }
