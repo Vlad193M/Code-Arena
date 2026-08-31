@@ -3,7 +3,7 @@ import type {
   LobbyServerToClientEvents,
 } from "@codearena/shared";
 import type { Server as HttpServer } from "http";
-import type { DefaultEventsMap, ExtendedError } from "socket.io";
+import type { DefaultEventsMap, ExtendedError, Socket } from "socket.io";
 import { Server as WebSocketServer } from "socket.io";
 import { z } from "zod";
 import { env } from "../config/env";
@@ -20,6 +20,16 @@ export type AppSocketServer = WebSocketServer<
   DefaultEventsMap,
   SocketData
 >;
+
+export type AppSocket = Socket<
+  LobbyClientToServerEvents,
+  LobbyServerToClientEvents,
+  DefaultEventsMap,
+  SocketData
+>;
+
+/** Feature modules register their own handlers, so `lib` stays unaware of them. */
+export type SocketHandlerRegistrar = (socket: AppSocket) => void;
 
 const handshakeAuthSchema = z.object({
   accessToken: z.string().min(1),
@@ -38,7 +48,10 @@ function toHandshakeError(error: unknown): ExtendedError {
   return Object.assign(new Error(message), { data: { kind } });
 }
 
-export function createWebSocketServer(httpServer: HttpServer): AppSocketServer {
+export function createWebSocketServer(
+  httpServer: HttpServer,
+  registrars: SocketHandlerRegistrar[] = [],
+): AppSocketServer {
   io = new WebSocketServer(httpServer, {
     cors: { origin: env.FRONTEND_URL },
   });
@@ -59,6 +72,10 @@ export function createWebSocketServer(httpServer: HttpServer): AppSocketServer {
 
   io.on("connection", (socket) => {
     console.log(`🔌 Socket ${socket.id} connected (user ${socket.data.userId})`);
+
+    for (const register of registrars) {
+      register(socket);
+    }
 
     socket.on("disconnect", (reason) => {
       console.log(`🔌 Socket ${socket.id} disconnected: ${reason}`);

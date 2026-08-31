@@ -15,10 +15,8 @@ function toLobbyMatch(match: SelectedMatch): LobbyMatch {
   return { ...match, createdAt: match.createdAt.toISOString() };
 }
 
-/**
- * Turns a zero-row write into a precise error. Only runs on the failing path,
- * so the successful command still costs a single statement.
- */
+/** Turns a zero-row write into a precise status. Runs only after a failure,
+ * so a successful command still costs a single statement. */
 async function explainWriteFailure(
   matchId: string,
   userId: string,
@@ -66,10 +64,8 @@ export async function createMatch(hostId: string): Promise<LobbyMatch> {
   return toLobbyMatch(match);
 }
 
-/**
- * The `where` clause carries the whole precondition, so concurrent joins are
- * resolved by Postgres: the loser updates zero rows instead of overwriting.
- */
+/** The `where` carries the whole precondition, so concurrent joins are settled
+ * by Postgres: the loser updates zero rows instead of overwriting the winner. */
 export async function joinMatch(
   matchId: string,
   userId: string,

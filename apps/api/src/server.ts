@@ -3,6 +3,7 @@ import { app } from "./app";
 import { env } from "./config/env";
 import { redis } from "./db/redis.client";
 import { createWebSocketServer } from "./lib/socket";
+import { registerLobbyHandlers } from "./modules/match/match.socket";
 
 async function start() {
   try {
@@ -11,7 +12,7 @@ async function start() {
     console.log(`✅ Redis connected and ping successful answer: ${pong}`);
 
     const httpServer = createServer(app);
-    createWebSocketServer(httpServer);
+    createWebSocketServer(httpServer, [registerLobbyHandlers]);
 
     httpServer.listen(env.PORT, () => {
       console.log(`🚀 Server running on port ${env.PORT}`);
