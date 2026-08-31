@@ -1,4 +1,4 @@
-import type { TerminalCheck } from "./components/TerminalChecks";
+import type { TerminalCheck } from "#/ui/TerminalChecks";
 
 export function check(
   ok: boolean,
