@@ -342,6 +342,21 @@ a {
   animation: crt-ellipsis 1.2s steps(1, end) infinite;
 }
 
+.crt-slidein {
+  animation: crt-slidein 320ms ease-out;
+}
+
+@keyframes crt-slidein {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes crt-blink {
   0%,
   49% {
@@ -370,7 +385,8 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .crt-blink,
-  .crt-ellipsis::after {
+  .crt-ellipsis::after,
+  .crt-slidein {
     animation: none;
   }
 }

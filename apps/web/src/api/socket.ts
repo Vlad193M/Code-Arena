@@ -1,7 +1,11 @@
+import type {
+  LobbyClientToServerEvents,
+  LobbyServerToClientEvents,
+} from "@codearena/shared";
+import { io, type Socket } from "socket.io-client";
+import { z } from "zod";
 import { ensureRefreshed } from "#/api/client";
 import { getAuthState, subscribe } from "#/feature/auth/store";
-import { type Socket, io } from "socket.io-client";
-import { z } from "zod";
 
 const isServer = () => typeof window === "undefined";
 
@@ -10,10 +14,16 @@ const handshakeErrorSchema = z.object({
   kind: z.string(),
 });
 
-let socket: Socket | undefined;
+/** Mirrors the server generics, swapped: the first slot is what this side listens to. */
+export type AppSocket = Socket<
+  LobbyServerToClientEvents,
+  LobbyClientToServerEvents
+>;
+
+let socket: AppSocket | undefined;
 let recovering = false;
 
-function createSocket(): Socket {
+function createSocket(): AppSocket {
   const instance = io(import.meta.env.VITE_API_URL, {
     autoConnect: false,
     auth: (cb) => cb({ accessToken: getAuthState().accessToken }),
@@ -28,7 +38,7 @@ function createSocket(): Socket {
 }
 
 /** The one socket for this tab. Feature hooks subscribe to it, never build their own. */
-export function getSocket(): Socket {
+export function getSocket(): AppSocket {
   if (isServer()) {
     throw new Error(
       "The socket is browser-only — guard callers with `ssr: false`.",
