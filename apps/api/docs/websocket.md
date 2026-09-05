@@ -72,6 +72,40 @@ flowchart TD
     D -->|"accepted"| OK["connect → attempt budget resets"]
 ```
 
+## Failures after the handshake
+
+An accepted socket still runs handlers that touch the database. Socket.io calls
+a listener and **discards the promise it returns**, so it has no `await` to
+reject into and no wrapper to catch it — unlike Express 5, which routes a
+rejected handler into the error middleware. An unguarded async listener
+therefore turns a transient query failure into an `unhandledRejection`, and Node
+ends the process: one client's failed subscribe would disconnect everyone,
+including players mid-match.
+
+`onSafe` (`src/lib/socket.ts`) is the registration every listener uses instead
+of `socket.on`. It keeps the event name and its arguments typed from
+`LobbyClientToServerEvents`, and settles the handler through a promise chain, so
+a synchronous throw and a rejection take the same path.
+
+```mermaid
+flowchart TD
+    E["client emits an event"] --> H["onSafe listener"]
+    H --> R{"handler settles"}
+    R -->|"resolved"| OK["nothing further"]
+    R -->|"threw or rejected"| L["log with event + userId"]
+    L --> F["toClientError:<br/>AppError → its message,<br/>anything else → Internal server error"]
+    F --> S["socket.emit lobby:error<br/>to that one socket"]
+    S --> U["useLobby sets error —<br/>the user sees why the list is empty"]
+
+    X["a path nobody guarded"] --> P["process unhandledRejection"]
+    P --> C["installCrashHandlers:<br/>log → io.close → redis.quit → exit(1)"]
+```
+
+`installCrashHandlers` (`src/lib/shutdown.ts`) is the net under that, not an
+alternative to it: reaching it means an unknown path failed, so the process
+stops rather than serving from a state no one can reason about. A forced
+`exit(1)` bounds the close in case it hangs.
+
 ## Notes
 
 - `authenticateToken` (`src/lib/jwt.ts`) is shared by the HTTP middleware and the

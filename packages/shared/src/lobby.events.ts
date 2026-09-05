@@ -19,11 +19,22 @@ export const lobbyMatchListSchema = z
 
 export type LobbyMatchRef = Pick<LobbyMatch, "id">;
 
+/** Sent to the one socket whose event failed, never broadcast: without it a
+ * failed handler is indistinguishable from a slow one. */
+export const lobbyErrorSchema = z
+  .object({ message: z.string().meta({ example: "Internal server error" }) })
+  .meta({
+    id: "LobbyError",
+    description: "A lobby event the server could not complete",
+  });
+export type LobbyError = z.infer<typeof lobbyErrorSchema>;
+
 /** Broadcast to the `lobby` room; payloads carry everything a row needs to render. */
 export interface LobbyServerToClientEvents {
   "lobby:matches": (matches: LobbyMatch[]) => void;
   "lobby:match_created": (match: LobbyMatch) => void;
   "lobby:match_removed": (match: LobbyMatchRef) => void;
+  "lobby:error": (error: LobbyError) => void;
 }
 
 /** Subscription control only — commands go over HTTP. */

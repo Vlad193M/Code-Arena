@@ -1,4 +1,4 @@
-import type { LobbyMatch } from "@codearena/shared";
+import type { LobbyError, LobbyMatch } from "@codearena/shared";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { apiClient } from "#/api/client";
 import { getSocket } from "#/api/socket";
@@ -28,6 +28,7 @@ export function useLobby(): LobbyView {
       dispatch({ type: "created", match });
     const onRemoved = ({ id }: { id: string }) =>
       dispatch({ type: "removed", id });
+    const onError = ({ message }: LobbyError) => setError(message);
 
     /** A reconnect gets a fresh socket id, so the server no longer holds the
      * old room membership — every connect has to subscribe again. */
@@ -35,6 +36,7 @@ export function useLobby(): LobbyView {
     socket.on("lobby:matches", onSnapshot);
     socket.on("lobby:match_created", onCreated);
     socket.on("lobby:match_removed", onRemoved);
+    socket.on("lobby:error", onError);
 
     if (socket.connected) subscribe();
 
@@ -44,6 +46,7 @@ export function useLobby(): LobbyView {
       socket.off("lobby:matches", onSnapshot);
       socket.off("lobby:match_created", onCreated);
       socket.off("lobby:match_removed", onRemoved);
+      socket.off("lobby:error", onError);
     };
   }, []);
 
