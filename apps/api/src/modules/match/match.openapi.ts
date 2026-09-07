@@ -24,7 +24,7 @@ export const matchPaths: ZodOpenApiPathsObject = {
       security: [{ bearerAuth: [] }],
       responses: {
         201: jsonResponse("Match created", lobbyMatchSchema),
-        ...errors("unauthorized"),
+        ...errors("unauthorized", "conflict"),
       },
     },
   },
@@ -50,7 +50,13 @@ export const matchPaths: ZodOpenApiPathsObject = {
       ...matchIdPath,
       responses: {
         204: { description: "Cancelled" },
-        ...errors("validation", "unauthorized", "forbidden", "not_found", "conflict"),
+        ...errors(
+          "validation",
+          "unauthorized",
+          "forbidden",
+          "not_found",
+          "conflict",
+        ),
       },
     },
   },

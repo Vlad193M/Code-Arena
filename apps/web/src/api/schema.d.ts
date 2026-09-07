@@ -594,6 +594,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
         };
     };
     joinMatch: {

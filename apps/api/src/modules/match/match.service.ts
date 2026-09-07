@@ -9,14 +9,34 @@ const lobbyMatchSelect = {
   host: { select: { id: true, username: true } },
 } satisfies Prisma.MatchSelect;
 
-type SelectedMatch = Prisma.MatchGetPayload<{ select: typeof lobbyMatchSelect }>;
+type SelectedMatch = Prisma.MatchGetPayload<{
+  select: typeof lobbyMatchSelect;
+}>;
 
 function toLobbyMatch(match: SelectedMatch): LobbyMatch {
   return { ...match, createdAt: match.createdAt.toISOString() };
 }
 
-/** Turns a zero-row write into a precise status. Runs only after a failure,
- * so a successful command still costs a single statement. */
+const ALREADY_IN_MATCH = "You are already in a match";
+
+/** The only unique constraint either write can break is the one active slot a
+ * player is allowed, so `P2002` always means the same thing here. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
+
+/** Neither guarded update nests a relation, so `P2025` can only be the row the
+ * write was aimed at failing to match. */
+function isRecordNotFound(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2025"
+  );
+}
+
 async function explainWriteFailure(
   matchId: string,
   userId: string,
@@ -56,32 +76,47 @@ export async function listOpenMatches(): Promise<LobbyMatch[]> {
 }
 
 export async function createMatch(hostId: string): Promise<LobbyMatch> {
-  const match = await prisma.match.create({
-    data: { hostId },
-    select: lobbyMatchSelect,
-  });
+  try {
+    const match = await prisma.match.create({
+      data: { hostId, activeMatchSlots: { create: { userId: hostId } } },
+      select: lobbyMatchSelect,
+    });
 
-  return toLobbyMatch(match);
+    return toLobbyMatch(match);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new AppError("conflict", ALREADY_IN_MATCH);
+    }
+    throw error;
+  }
 }
 
-/** The `where` carries the whole precondition, so concurrent joins are settled
- * by Postgres: the loser updates zero rows instead of overwriting the winner. */
 export async function joinMatch(
   matchId: string,
   userId: string,
 ): Promise<void> {
-  const { count } = await prisma.match.updateMany({
-    where: {
-      id: matchId,
-      status: "WAITING",
-      guestId: null,
-      hostId: { not: userId },
-    },
-    data: { guestId: userId, status: "IN_PROGRESS", startedAt: new Date() },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.match.update({
+        where: {
+          id: matchId,
+          status: "WAITING",
+          guestId: null,
+          hostId: { not: userId },
+        },
+        data: { guestId: userId, status: "IN_PROGRESS", startedAt: new Date() },
+      });
 
-  if (count === 0) {
-    await explainWriteFailure(matchId, userId, "join");
+      await tx.activeMatchSlot.create({ data: { matchId, userId } });
+    });
+  } catch (error) {
+    if (isRecordNotFound(error)) {
+      await explainWriteFailure(matchId, userId, "join");
+    }
+    if (isUniqueViolation(error)) {
+      throw new AppError("conflict", ALREADY_IN_MATCH);
+    }
+    throw error;
   }
 }
 
@@ -89,12 +124,19 @@ export async function cancelMatch(
   matchId: string,
   userId: string,
 ): Promise<void> {
-  const { count } = await prisma.match.updateMany({
-    where: { id: matchId, hostId: userId, status: "WAITING" },
-    data: { status: "CANCELLED", endedAt: new Date() },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.match.update({
+        where: { id: matchId, hostId: userId, status: "WAITING" },
+        data: { status: "CANCELLED", endedAt: new Date() },
+      });
 
-  if (count === 0) {
-    await explainWriteFailure(matchId, userId, "cancel");
+      await tx.activeMatchSlot.deleteMany({ where: { matchId } });
+    });
+  } catch (error) {
+    if (isRecordNotFound(error)) {
+      await explainWriteFailure(matchId, userId, "cancel");
+    }
+    throw error;
   }
 }
