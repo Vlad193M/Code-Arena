@@ -55,9 +55,12 @@ export function useLobby(): LobbyView {
    * broadcast to show its own result: with the socket down the button would
    * read as dead and every retry would persist another match. A command
    * applies its own outcome, and the reducer absorbs the broadcast that
-   * repeats it. */
+   * repeats it.
+   *
+   * A command returns the message of its failure, the action for its result,
+   * or nothing when it succeeded with nothing to apply. */
   const run = useCallback(
-    async (command: () => Promise<LobbyAction | string>) => {
+    async (command: () => Promise<LobbyAction | string | undefined>) => {
       setPending(true);
       setError(undefined);
 
@@ -65,7 +68,7 @@ export function useLobby(): LobbyView {
         const outcome = await command();
 
         if (typeof outcome === "string") setError(outcome);
-        else dispatch(outcome);
+        else if (outcome) dispatch(outcome);
       } catch (cause) {
         console.error("[lobby] command failed", cause);
         setError("Connection failed");
@@ -82,7 +85,16 @@ export function useLobby(): LobbyView {
         const { data, error: failure } = await apiClient.POST("/api/matches");
         if (failure) return failure.error;
 
-        return { type: "created", match: lobbyMatchSchema.parse(data) };
+        /** The match exists either way, so a body we cannot read is not a
+         * failure to report — only one we cannot apply. The broadcast still
+         * brings the row. */
+        const created = lobbyMatchSchema.safeParse(data);
+        if (!created.success) {
+          console.error("[lobby] unexpected match payload", created.error);
+          return undefined;
+        }
+
+        return { type: "created", match: created.data };
       }),
     [run],
   );
