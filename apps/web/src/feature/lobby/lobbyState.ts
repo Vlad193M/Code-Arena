@@ -1,7 +1,7 @@
 import type { LobbyMatch } from "@codearena/shared";
 import { assertNever } from "#/lib/assertNever";
 
-type LobbyAction =
+export type LobbyAction =
   | { type: "snapshot"; matches: LobbyMatch[] }
   | { type: "created"; match: LobbyMatch }
   | { type: "removed"; id: string };

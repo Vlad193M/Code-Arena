@@ -1,8 +1,9 @@
 import type { LobbyError, LobbyMatch } from "@codearena/shared";
+import { lobbyMatchSchema } from "@codearena/shared";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { apiClient } from "#/api/client";
 import { getSocket } from "#/api/socket";
-import { lobbyReducer } from "./lobbyState";
+import { type LobbyAction, lobbyReducer } from "./lobbyState";
 
 export type LobbyView = {
   matches: LobbyMatch[];
@@ -50,15 +51,21 @@ export function useLobby(): LobbyView {
     };
   }, []);
 
-  /** Commands report failure through `error`; the list itself never updates
-   * here — it arrives over the broadcast, for the actor as for everyone else. */
+  /** HTTP and the socket fail independently, so a command cannot wait for the
+   * broadcast to show its own result: with the socket down the button would
+   * read as dead and every retry would persist another match. A command
+   * applies its own outcome, and the reducer absorbs the broadcast that
+   * repeats it. */
   const run = useCallback(
-    async (command: () => Promise<string | undefined>) => {
+    async (command: () => Promise<LobbyAction | string>) => {
       setPending(true);
       setError(undefined);
 
       try {
-        setError(await command());
+        const outcome = await command();
+
+        if (typeof outcome === "string") setError(outcome);
+        else dispatch(outcome);
       } catch (cause) {
         console.error("[lobby] command failed", cause);
         setError("Connection failed");
@@ -72,8 +79,10 @@ export function useLobby(): LobbyView {
   const createMatch = useCallback(
     () =>
       run(async () => {
-        const { error: failure } = await apiClient.POST("/api/matches");
-        return failure?.error;
+        const { data, error: failure } = await apiClient.POST("/api/matches");
+        if (failure) return failure.error;
+
+        return { type: "created", match: lobbyMatchSchema.parse(data) };
       }),
     [run],
   );
@@ -85,7 +94,7 @@ export function useLobby(): LobbyView {
           "/api/matches/{id}/join",
           { params: { path: { id } } },
         );
-        return failure?.error;
+        return failure ? failure.error : { type: "removed", id };
       }),
     [run],
   );
@@ -97,7 +106,7 @@ export function useLobby(): LobbyView {
           "/api/matches/{id}/cancel",
           { params: { path: { id } } },
         );
-        return failure?.error;
+        return failure ? failure.error : { type: "removed", id };
       }),
     [run],
   );
