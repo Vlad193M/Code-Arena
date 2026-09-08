@@ -6,17 +6,15 @@ const NEW_FOR_MS = 10_000;
 
 type MatchRowProps = {
 	match: LobbyMatch;
+	now: number;
 	isOwn: boolean;
 	pending: boolean;
 	onJoin: (id: string) => void;
 	onCancel: (id: string) => void;
 };
 
-function waitingFor(createdAt: string): string {
-	const seconds = Math.max(
-		0,
-		Math.round((Date.now() - Date.parse(createdAt)) / 1000),
-	);
+function waitingFor(createdAt: string, now: number): string {
+	const seconds = Math.max(0, Math.round((now - Date.parse(createdAt)) / 1000));
 	const minutes = Math.floor(seconds / 60);
 
 	return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
@@ -24,12 +22,13 @@ function waitingFor(createdAt: string): string {
 
 export default function MatchRow({
 	match,
+	now,
 	isOwn,
 	pending,
 	onJoin,
 	onCancel,
 }: MatchRowProps) {
-	const isNew = Date.now() - Date.parse(match.createdAt) < NEW_FOR_MS;
+	const isNew = now - Date.parse(match.createdAt) < NEW_FOR_MS;
 
 	return (
 		<div
@@ -49,7 +48,7 @@ export default function MatchRow({
 			</div>
 
 			<div className="text-[13px] text-(--crt-dim)">
-				{waitingFor(match.createdAt)}
+				{waitingFor(match.createdAt, now)}
 			</div>
 
 			<div className="text-right">

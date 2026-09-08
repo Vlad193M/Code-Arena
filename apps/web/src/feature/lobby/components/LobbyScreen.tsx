@@ -1,5 +1,5 @@
 import { useLobby } from "../useLobby";
-import MatchRow, { LOBBY_COLUMNS } from "./MatchRow";
+import MatchList from "./MatchList";
 
 type LobbyScreenProps = {
 	currentUserId: string;
@@ -32,34 +32,13 @@ export default function LobbyScreen({ currentUserId }: LobbyScreenProps) {
 
 					<div className="flex items-stretch">
 						<div className="crt-edge w-px" />
-						<div className="min-w-0 flex-1 bg-[linear-gradient(180deg,rgba(255,176,0,0.03),rgba(255,176,0,0.01))]">
-							<div
-								style={{ gridTemplateColumns: LOBBY_COLUMNS }}
-								className="grid gap-3 border-b border-[rgba(122,92,56,0.5)] px-[clamp(12px,2vw,20px)] py-3 text-[11.5px] tracking-[0.12em] text-(--crt-dim)"
-							>
-								<div>OPPONENT</div>
-								<div>WAITING</div>
-								<div className="text-right">ACTION</div>
-							</div>
-
-							{matches.length === 0 ? (
-								<div className="px-[clamp(12px,2vw,20px)] py-[54px] text-center text-sm tracking-[0.05em] text-(--crt-dim)">
-									NO OPEN MATCHES. CREATE ONE TO START
-									<span className="crt-blink ml-0.5 inline-block h-3.5 w-2 -mb-0.5 bg-(--crt-amber)" />
-								</div>
-							) : (
-								matches.map((match) => (
-									<MatchRow
-										key={match.id}
-										match={match}
-										isOwn={match.host.id === currentUserId}
-										pending={pending}
-										onJoin={joinMatch}
-										onCancel={cancelMatch}
-									/>
-								))
-							)}
-						</div>
+						<MatchList
+							matches={matches}
+							currentUserId={currentUserId}
+							pending={pending}
+							onJoin={joinMatch}
+							onCancel={cancelMatch}
+						/>
 						<div className="crt-edge w-px" />
 					</div>
 
