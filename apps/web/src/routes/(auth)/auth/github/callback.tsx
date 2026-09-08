@@ -1,9 +1,9 @@
 import { apiClient } from "#/api/client";
-import TerminalAlert from "#/feature/auth/components/TerminalAlert";
-import TerminalFrame from "#/feature/auth/components/TerminalFrame";
 import { type AuthError, toAuthError } from "#/feature/auth/errors";
 import { takeGithubReturnTo } from "#/feature/auth/githubReturnTo";
 import { setSession } from "#/feature/auth/store";
+import TerminalAlert from "#/ui/TerminalAlert";
+import TerminalFrame from "#/ui/TerminalFrame";
 import { githubCallbackSchema } from "@codearena/shared";
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 import z from "zod";

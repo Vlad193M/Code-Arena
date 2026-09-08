@@ -8,6 +8,7 @@
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.5",
     "concurrently": "^10.0.0"
   }
 }

@@ -13,10 +13,48 @@ datasource db {
 }
 
 model User {
-  id    String @id @default(cuid())
-  githubId String? @unique
-  email String @unique
-  username String @unique
-  password String?
-  createdAt DateTime @default(now())
+  id              String           @id @default(cuid())
+  githubId        String?          @unique
+  email           String           @unique
+  username        String           @unique
+  password        String?
+  createdAt       DateTime         @default(now())
+  hostedMatches   Match[]          @relation("MatchHost")
+  joinedMatches   Match[]          @relation("MatchGuest")
+  activeMatchSlot ActiveMatchSlot?
+}
+
+enum MatchStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+model Match {
+  id     String      @id @default(cuid())
+  status MatchStatus @default(WAITING)
+
+  hostId String
+  host   User   @relation("MatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+
+  guestId String?
+  guest   User?   @relation("MatchGuest", fields: [guestId], references: [id], onDelete: SetNull)
+
+  createdAt        DateTime          @default(now())
+  startedAt        DateTime?
+  endedAt          DateTime?
+  activeMatchSlots ActiveMatchSlot[]
+
+  @@index([status, createdAt])
+}
+
+model ActiveMatchSlot {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  matchId String
+  match   Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
 }

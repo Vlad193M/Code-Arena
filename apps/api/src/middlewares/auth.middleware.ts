@@ -17,3 +17,13 @@ export async function authenticateMiddleware(
   req.user = { id: await authenticateToken(token) };
   next();
 }
+
+/** Narrows the optional `req.user` for handlers that run behind
+ * {@link authenticateMiddleware}, which Express types cannot express. */
+export function requireUserId(req: Request): string {
+  if (!req.user) {
+    throw new AppError("unauthorized", "User not authenticated");
+  }
+
+  return req.user.id;
+}

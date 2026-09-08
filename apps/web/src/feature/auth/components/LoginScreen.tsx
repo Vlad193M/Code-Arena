@@ -1,16 +1,16 @@
-import { apiClient } from "#/api/client";
 import { loginSchema } from "@codearena/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { toApiErrorMessage, toThrownErrorMessage } from "../errors";
+import { apiClient } from "#/api/client";
+import TerminalAlert from "#/ui/TerminalAlert";
+import TerminalButton from "#/ui/TerminalButton";
+import type { TerminalCheck } from "#/ui/TerminalChecks";
+import TerminalField from "#/ui/TerminalField";
+import TerminalFrame from "#/ui/TerminalFrame";
 import { check, missing } from "../checks";
+import { toApiErrorMessage, toThrownErrorMessage } from "../errors";
 import { setSession } from "../store";
 import GithubAuthButton from "./GithubAuthButton";
-import TerminalAlert from "./TerminalAlert";
-import TerminalButton from "./TerminalButton";
-import type { TerminalCheck } from "./TerminalChecks";
-import TerminalField from "./TerminalField";
-import TerminalFrame from "./TerminalFrame";
 
 const field = loginSchema.shape;
 
