@@ -1,5 +1,6 @@
 import type { LobbyError, LobbyMatch } from "@codearena/shared";
 import { lobbyMatchSchema } from "@codearena/shared";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { apiClient } from "#/api/client";
 import { getSocket } from "#/api/socket";
@@ -15,6 +16,7 @@ export type LobbyView = {
 };
 
 export function useLobby(): LobbyView {
+	const navigate = useNavigate();
 	const [matches, dispatch] = useReducer(lobbyReducer, []);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | undefined>(undefined);
@@ -94,9 +96,10 @@ export function useLobby(): LobbyView {
 					return undefined;
 				}
 
+				navigate({ to: "/match/$id", params: { id: created.data.id } });
 				return { type: "created", match: created.data };
 			}),
-		[run],
+		[run, navigate],
 	);
 
 	const joinMatch = useCallback(
@@ -106,9 +109,12 @@ export function useLobby(): LobbyView {
 					"/api/matches/{id}/join",
 					{ params: { path: { id } } },
 				);
-				return failure ? failure.error : { type: "removed", id };
+				if (failure) return failure.error;
+
+				navigate({ to: "/match/$id", params: { id } });
+				return { type: "removed", id };
 			}),
-		[run],
+		[run, navigate],
 	);
 
 	const cancelMatch = useCallback(

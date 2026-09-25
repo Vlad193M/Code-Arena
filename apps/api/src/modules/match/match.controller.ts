@@ -4,7 +4,7 @@ import { serialize } from "../../lib/serialize";
 import { requireUserId } from "../../middlewares/auth.middleware";
 import { matchIdParamsSchema } from "./match.schemas";
 import * as MatchService from "./match.service";
-import { emitMatchCreated, emitMatchRemoved } from "./match.socket";
+import { broadcastMatchClosed, emitMatchCreated } from "./match.socket";
 
 export async function listMatches(_req: Request, res: Response) {
 	const matches = await MatchService.listOpenMatches();
@@ -21,16 +21,14 @@ export async function createMatch(req: Request, res: Response) {
 
 export async function joinMatch(req: Request, res: Response) {
 	const { id } = matchIdParamsSchema.parse(req.params);
-	await MatchService.joinMatch(id, requireUserId(req));
-	emitMatchRemoved(id);
+	broadcastMatchClosed(await MatchService.joinMatch(id, requireUserId(req)));
 
 	res.sendStatus(204);
 }
 
 export async function cancelMatch(req: Request, res: Response) {
 	const { id } = matchIdParamsSchema.parse(req.params);
-	await MatchService.cancelMatch(id, requireUserId(req));
-	emitMatchRemoved(id);
+	broadcastMatchClosed(await MatchService.cancelMatch(id, requireUserId(req)));
 
 	res.sendStatus(204);
 }

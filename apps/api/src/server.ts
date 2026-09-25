@@ -4,7 +4,10 @@ import { env } from "./config/env";
 import { redis } from "./db/redis.client";
 import { installCrashHandlers } from "./lib/shutdown";
 import { createWebSocketServer } from "./lib/socket";
-import { registerLobbyHandlers } from "./modules/match/match.socket";
+import {
+	registerLobbyHandlers,
+	registerMatchRoomHandlers,
+} from "./modules/match/match.socket";
 
 async function start() {
 	try {
@@ -13,7 +16,10 @@ async function start() {
 		console.log(`✅ Redis connected and ping successful answer: ${pong}`);
 
 		const httpServer = createServer(app);
-		const io = createWebSocketServer(httpServer, [registerLobbyHandlers]);
+		const io = createWebSocketServer(httpServer, [
+			registerLobbyHandlers,
+			registerMatchRoomHandlers,
+		]);
 
 		/** `io.close` also closes the HTTP server it was attached to. */
 		installCrashHandlers(async () => {

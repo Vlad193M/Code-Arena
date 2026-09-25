@@ -1,4 +1,4 @@
-import type { LobbyMatch } from "@codearena/shared";
+import type { LobbyMatch, MatchRoom } from "@codearena/shared";
 import { prisma } from "../../db/prisma.client";
 import { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../lib/errors";
@@ -14,10 +14,101 @@ type SelectedMatch = Prisma.MatchGetPayload<{
 }>;
 
 function toLobbyMatch(match: SelectedMatch): LobbyMatch {
-	return { ...match, createdAt: match.createdAt.toISOString() };
+	return {
+		id: match.id,
+		createdAt: match.createdAt.toISOString(),
+		host: match.host,
+	};
+}
+
+/** Every transaction that changes a match room runs through here, so they all
+ * queue on the match row and none can reach it holding another lock. Slots
+ * stay unlocked: the ordering is what this buys, not their protection. */
+function withMatchLock<T>(
+	matchId: string,
+	fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+	return prisma.$transaction(async (tx) => {
+		await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${matchId} FOR UPDATE`;
+
+		return fn(tx);
+	});
+}
+
+const matchRoomSelect = {
+	id: true,
+	createdAt: true,
+	status: true,
+	hostId: true,
+	guestId: true,
+	host: { select: { id: true, username: true } },
+	guest: { select: { id: true, username: true } },
+	activeMatchSlots: { select: { userId: true, ready: true } },
+} satisfies Prisma.MatchSelect;
+
+type SelectedMatchRoom = Prisma.MatchGetPayload<{
+	select: typeof matchRoomSelect;
+}>;
+
+function toMatchRoom(match: SelectedMatchRoom): MatchRoom {
+	const readyByUserId = new Map(
+		match.activeMatchSlots.map((slot) => [slot.userId, slot.ready]),
+	);
+
+	return {
+		id: match.id,
+		status: match.status,
+		host: {
+			...match.host,
+			ready: readyByUserId.get(match.hostId) ?? false,
+		},
+		guest: match.guest
+			? { ...match.guest, ready: readyByUserId.get(match.guest.id) ?? false }
+			: null,
+	};
+}
+
+/** Callers inside a transaction must pass their own `tx`: the global client
+ * would take a second connection and block on the lock its own caller holds. */
+function readMatchRoom(
+	matchId: string,
+	client: Prisma.TransactionClient = prisma,
+): Promise<SelectedMatchRoom | null> {
+	return client.match.findUnique({
+		where: { id: matchId },
+		select: matchRoomSelect,
+	});
+}
+
+/** The room payload for callers that have already established the match exists
+ * — inside a transaction that just wrote to it. */
+async function matchRoomOrThrow(
+	matchId: string,
+	client: Prisma.TransactionClient = prisma,
+): Promise<MatchRoom> {
+	return toMatchRoom(
+		await client.match.findUniqueOrThrow({
+			where: { id: matchId },
+			select: matchRoomSelect,
+		}),
+	);
 }
 
 const ALREADY_IN_MATCH = "You are already in a match";
+const NOT_A_PARTICIPANT = "You are not a participant in this match";
+
+/** The one place the host-or-guest rule is stated, so the two public readers
+ * and their error kinds cannot drift. */
+function assertIsParticipant<
+	T extends { hostId: string; guestId: string | null },
+>(match: T | null, userId: string): asserts match is T {
+	if (!match) {
+		throw new AppError("not_found", "Match not found");
+	}
+	if (match.hostId !== userId && match.guestId !== userId) {
+		throw new AppError("forbidden", NOT_A_PARTICIPANT);
+	}
+}
 
 /** The only unique constraint either write can break is the one active slot a
  * player is allowed, so `P2002` always means the same thing here. */
@@ -67,7 +158,7 @@ async function explainWriteFailure(
 
 export async function listOpenMatches(): Promise<LobbyMatch[]> {
 	const matches = await prisma.match.findMany({
-		where: { status: "WAITING" },
+		where: { status: "WAITING", guestId: null },
 		orderBy: { createdAt: "desc" },
 		select: lobbyMatchSelect,
 	});
@@ -94,9 +185,9 @@ export async function createMatch(hostId: string): Promise<LobbyMatch> {
 export async function joinMatch(
 	matchId: string,
 	userId: string,
-): Promise<void> {
+): Promise<MatchRoom> {
 	try {
-		await prisma.$transaction(async (tx) => {
+		return await withMatchLock(matchId, async (tx) => {
 			await tx.match.update({
 				where: {
 					id: matchId,
@@ -104,10 +195,17 @@ export async function joinMatch(
 					guestId: null,
 					hostId: { not: userId },
 				},
-				data: { guestId: userId, status: "IN_PROGRESS", startedAt: new Date() },
+				data: { guestId: userId },
 			});
 
+			// A host who readied while alone agreed to face nobody in particular.
+			await tx.activeMatchSlot.updateMany({
+				where: { matchId },
+				data: { ready: false },
+			});
 			await tx.activeMatchSlot.create({ data: { matchId, userId } });
+
+			return matchRoomOrThrow(matchId, tx);
 		});
 	} catch (error) {
 		if (isRecordNotFound(error)) {
@@ -123,15 +221,25 @@ export async function joinMatch(
 export async function cancelMatch(
 	matchId: string,
 	userId: string,
-): Promise<void> {
+): Promise<MatchRoom> {
 	try {
-		await prisma.$transaction(async (tx) => {
+		return await withMatchLock(matchId, async (tx) => {
+			// `guestId: null` keeps this to matches the lobby actually lists: once
+			// someone has joined, only leaving the room cancels the match, so a
+			// guest can never be dropped without their room hearing about it.
 			await tx.match.update({
-				where: { id: matchId, hostId: userId, status: "WAITING" },
+				where: {
+					id: matchId,
+					hostId: userId,
+					status: "WAITING",
+					guestId: null,
+				},
 				data: { status: "CANCELLED", endedAt: new Date() },
 			});
 
 			await tx.activeMatchSlot.deleteMany({ where: { matchId } });
+
+			return matchRoomOrThrow(matchId, tx);
 		});
 	} catch (error) {
 		if (isRecordNotFound(error)) {
@@ -139,4 +247,166 @@ export async function cancelMatch(
 		}
 		throw error;
 	}
+}
+
+/** The scalar-only gate for callers that must authorize before they act but do
+ * not need the room itself yet. */
+export async function assertParticipant(
+	matchId: string,
+	userId: string,
+): Promise<void> {
+	assertIsParticipant(
+		await prisma.match.findUnique({
+			where: { id: matchId },
+			select: { hostId: true, guestId: true },
+		}),
+		userId,
+	);
+}
+
+export async function getMatchRoom(
+	matchId: string,
+	userId: string,
+): Promise<MatchRoom> {
+	const match = await readMatchRoom(matchId);
+	assertIsParticipant(match, userId);
+
+	return toMatchRoom(match);
+}
+
+export async function setReady(
+	matchId: string,
+	userId: string,
+	ready: boolean,
+): Promise<MatchRoom> {
+	try {
+		return await withMatchLock(matchId, async (tx) => {
+			const match = await readMatchRoom(matchId, tx);
+			if (!match) {
+				throw new AppError("not_found", "Match not found");
+			}
+			if (match.status !== "WAITING") {
+				throw new AppError("conflict", "Match is no longer waiting to start");
+			}
+
+			await tx.activeMatchSlot.update({
+				where: { userId, matchId },
+				data: { ready },
+			});
+
+			const slots = match.activeMatchSlots.map((slot) =>
+				slot.userId === userId ? { ...slot, ready } : slot,
+			);
+			const bothReady = slots.length === 2 && slots.every((slot) => slot.ready);
+
+			if (bothReady) {
+				await tx.match.update({
+					where: { id: matchId },
+					data: { status: "IN_PROGRESS", startedAt: new Date() },
+				});
+			}
+
+			return toMatchRoom({
+				...match,
+				status: bothReady ? "IN_PROGRESS" : match.status,
+				activeMatchSlots: slots,
+			});
+		});
+	} catch (error) {
+		if (isRecordNotFound(error)) {
+			throw new AppError("forbidden", NOT_A_PARTICIPANT);
+		}
+		throw error;
+	}
+}
+
+export type MatchRoomLeaveResult =
+	| {
+			event: "cancelled";
+			matchId: string;
+			/** `null` when a cancelled match never had a guest — there is no one left
+			 * in the room to tell, only the lobby listing to clear. */
+			room: MatchRoom | null;
+	  }
+	| {
+			event: "reopened";
+			matchId: string;
+			room: MatchRoom;
+			lobbyMatch: LobbyMatch;
+	  };
+
+async function cancelAsHost(
+	tx: Prisma.TransactionClient,
+	match: SelectedMatchRoom,
+): Promise<MatchRoomLeaveResult> {
+	await tx.match.update({
+		where: { id: match.id },
+		data: { status: "CANCELLED", endedAt: new Date() },
+	});
+	await tx.activeMatchSlot.deleteMany({ where: { matchId: match.id } });
+
+	return {
+		event: "cancelled",
+		matchId: match.id,
+		room: match.guestId
+			? toMatchRoom({ ...match, status: "CANCELLED", activeMatchSlots: [] })
+			: null,
+	};
+}
+
+async function releaseGuestSlot(
+	tx: Prisma.TransactionClient,
+	match: SelectedMatchRoom,
+	guestId: string,
+): Promise<MatchRoomLeaveResult> {
+	await tx.activeMatchSlot.delete({ where: { userId: guestId } });
+	await tx.activeMatchSlot.updateMany({
+		where: { matchId: match.id },
+		data: { ready: false },
+	});
+	await tx.match.update({
+		where: { id: match.id },
+		data: { guestId: null },
+	});
+
+	return {
+		event: "reopened",
+		matchId: match.id,
+		room: toMatchRoom({
+			...match,
+			guestId: null,
+			guest: null,
+			activeMatchSlots: [{ userId: match.hostId, ready: false }],
+		}),
+		lobbyMatch: toLobbyMatch(match),
+	};
+}
+
+/** Shared by a deliberate `match:leave` and a bare socket `disconnect` — both
+ * mean the same thing to the room. Only a `WAITING` match has a room worth
+ * leaving cleanly; once a match is `IN_PROGRESS` a dropped connection is a
+ * gameplay concern, not a room one. A `matchId` the caller no longer holds a
+ * slot in makes this a no-op, so a stale tab cannot take down the match its
+ * player has since moved to. */
+export async function leaveMatchRoom(
+	userId: string,
+	matchId: string,
+): Promise<MatchRoomLeaveResult | null> {
+	return withMatchLock(matchId, async (tx) => {
+		const match = await readMatchRoom(matchId, tx);
+		if (!match || match.status !== "WAITING") {
+			return null;
+		}
+		if (!match.activeMatchSlots.some((slot) => slot.userId === userId)) {
+			return null;
+		}
+
+		if (match.hostId === userId) {
+			return cancelAsHost(tx, match);
+		}
+
+		return match.guestId === userId
+			? releaseGuestSlot(tx, match, userId)
+			: null;
+	});
 }

@@ -1,6 +1,8 @@
 import type {
 	LobbyClientToServerEvents,
 	LobbyServerToClientEvents,
+	MatchRoomClientToServerEvents,
+	MatchRoomServerToClientEvents,
 } from "@codearena/shared";
 import { io, type Socket } from "socket.io-client";
 import { z } from "zod";
@@ -16,8 +18,8 @@ const handshakeErrorSchema = z.object({
 
 /** Mirrors the server generics, swapped: the first slot is what this side listens to. */
 export type AppSocket = Socket<
-	LobbyServerToClientEvents,
-	LobbyClientToServerEvents
+	LobbyServerToClientEvents & MatchRoomServerToClientEvents,
+	LobbyClientToServerEvents & MatchRoomClientToServerEvents
 >;
 
 let socket: AppSocket | undefined;
