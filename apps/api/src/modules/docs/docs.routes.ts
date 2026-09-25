@@ -8,9 +8,9 @@ export const docsRouter: Router = Router();
 
 docsRouter.get("/openapi.json", getOpenApiSpec);
 docsRouter.use(
-  "/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(undefined, {
-    swaggerOptions: { url: OPENAPI_URL },
-  }),
+	"/docs",
+	swaggerUi.serve,
+	swaggerUi.setup(undefined, {
+		swaggerOptions: { url: OPENAPI_URL },
+	}),
 );

@@ -1,5 +1,5 @@
-import { ensureRefreshed } from "#/api/client";
 import { redirect } from "@tanstack/react-router";
+import { ensureRefreshed } from "#/api/client";
 import { getAuthState } from "./store";
 
 /**
@@ -8,23 +8,23 @@ import { getAuthState } from "./store";
  * user looks anonymous. Settled states skip it — guards run on every navigation.
  */
 async function settledAuth() {
-  if (getAuthState().status === "unknown") {
-    await ensureRefreshed();
-  }
+	if (getAuthState().status === "unknown") {
+		await ensureRefreshed();
+	}
 
-  return getAuthState();
+	return getAuthState();
 }
 
 /** Routes using this must set `ssr: false` — auth state exists only in the browser. */
 export async function requireUser() {
-  if ((await settledAuth()).status !== "authenticated") {
-    throw redirect({ to: "/login", replace: true });
-  }
+	if ((await settledAuth()).status !== "authenticated") {
+		throw redirect({ to: "/login", replace: true });
+	}
 }
 
 /** Not for the GitHub callback: it authenticates mid-loader and must stay reachable. */
 export async function requireAnonymous() {
-  if ((await settledAuth()).status === "authenticated") {
-    throw redirect({ to: "/", replace: true });
-  }
+	if ((await settledAuth()).status === "authenticated") {
+		throw redirect({ to: "/", replace: true });
+	}
 }

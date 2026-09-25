@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { authenticateMiddleware } from "../../middlewares/auth.middleware";
 import {
-  cancelMatch,
-  createMatch,
-  joinMatch,
-  listMatches,
+	cancelMatch,
+	createMatch,
+	joinMatch,
+	listMatches,
 } from "./match.controller";
 
 export const matchRouter: Router = Router();
