@@ -8,12 +8,12 @@ import { AppError } from "./errors";
  * `ZodError`: that branch answers 400 and blames the caller for our mismatch.
  */
 export function serialize<T>(schema: ZodType<T>, payload: unknown): T {
-  const result = schema.safeParse(payload);
+	const result = schema.safeParse(payload);
 
-  if (!result.success) {
-    console.error("❌ Response contract violation:", result.error.issues);
-    throw new AppError("internal", "Response contract violation");
-  }
+	if (!result.success) {
+		console.error("❌ Response contract violation:", result.error.issues);
+		throw new AppError("internal", "Response contract violation");
+	}
 
-  return result.data;
+	return result.data;
 }

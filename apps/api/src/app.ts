@@ -1,8 +1,7 @@
-import type { Application } from "express";
-import express from "express";
-
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import type { Application } from "express";
+import express from "express";
 import helmet from "helmet";
 import { env } from "./config/env";
 import { errorMiddleware } from "./middlewares/error.middleware";
@@ -16,13 +15,13 @@ export const app: Application = express();
 app.use(helmet());
 
 app.use(
-  cors({
-    origin:
-      env.NODE_ENV === "production"
-        ? "https://your-domain.com"
-        : [env.FRONTEND_URL, `http://localhost:${env.PORT}`],
-    credentials: true,
-  }),
+	cors({
+		origin:
+			env.NODE_ENV === "production"
+				? "https://your-domain.com"
+				: [env.FRONTEND_URL, `http://localhost:${env.PORT}`],
+		credentials: true,
+	}),
 );
 
 app.use(express.json());

@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { authenticateMiddleware } from "../../middlewares/auth.middleware";
 import {
-  githubAuth,
-  githubCallback,
-  login,
-  logout,
-  me,
-  refresh,
-  register,
+	githubAuth,
+	githubCallback,
+	login,
+	logout,
+	me,
+	refresh,
+	register,
 } from "./auth.controller";
 
 export const authRouter: Router = Router();

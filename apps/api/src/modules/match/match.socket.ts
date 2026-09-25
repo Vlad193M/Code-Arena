@@ -17,40 +17,40 @@ const LOBBY_ROOM = "lobby";
 let lobbyQueue: Promise<unknown> = Promise.resolve();
 
 function sequenced<T>(task: () => T | Promise<T>): Promise<T> {
-  const next = lobbyQueue.then(task, task);
-  lobbyQueue = next.catch(() => undefined);
+	const next = lobbyQueue.then(task, task);
+	lobbyQueue = next.catch(() => undefined);
 
-  return next;
+	return next;
 }
 
 /** A broadcast has no caller to report to, so a lost one is logged, not thrown. */
 function broadcast(emit: () => void): void {
-  void sequenced(emit).catch((error: unknown) => {
-    console.error("❌ Lobby broadcast failed:", error);
-  });
+	void sequenced(emit).catch((error: unknown) => {
+		console.error("❌ Lobby broadcast failed:", error);
+	});
 }
 
 export function registerLobbyHandlers(socket: AppSocket) {
-  onSafe(socket, "lobby:subscribe", () =>
-    sequenced(async () => {
-      await socket.join(LOBBY_ROOM);
-      socket.emit("lobby:matches", await MatchService.listOpenMatches());
-    }),
-  );
+	onSafe(socket, "lobby:subscribe", () =>
+		sequenced(async () => {
+			await socket.join(LOBBY_ROOM);
+			socket.emit("lobby:matches", await MatchService.listOpenMatches());
+		}),
+	);
 
-  onSafe(socket, "lobby:unsubscribe", () => {
-    socket.leave(LOBBY_ROOM);
-  });
+	onSafe(socket, "lobby:unsubscribe", () => {
+		socket.leave(LOBBY_ROOM);
+	});
 }
 
 export function emitMatchCreated(match: LobbyMatch) {
-  broadcast(() => {
-    getWebSocket().to(LOBBY_ROOM).emit("lobby:match_created", match);
-  });
+	broadcast(() => {
+		getWebSocket().to(LOBBY_ROOM).emit("lobby:match_created", match);
+	});
 }
 
 export function emitMatchRemoved(id: string) {
-  broadcast(() => {
-    getWebSocket().to(LOBBY_ROOM).emit("lobby:match_removed", { id });
-  });
+	broadcast(() => {
+		getWebSocket().to(LOBBY_ROOM).emit("lobby:match_removed", { id });
+	});
 }

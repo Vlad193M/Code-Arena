@@ -1,11 +1,11 @@
 import type { TerminalCheck } from "#/ui/TerminalChecks";
 
 export function check(
-  ok: boolean,
-  okText: string,
-  badText: string,
+	ok: boolean,
+	okText: string,
+	badText: string,
 ): TerminalCheck {
-  return { ok, text: ok ? okText : badText };
+	return { ok, text: ok ? okText : badText };
 }
 
 /**
@@ -13,5 +13,5 @@ export function check(
  * red text; once a submit was attempted, it has to say what is missing.
  */
 export function missing(label: string): Array<TerminalCheck> {
-  return [{ ok: false, text: `${label} is required` }];
+	return [{ ok: false, text: `${label} is required` }];
 }
