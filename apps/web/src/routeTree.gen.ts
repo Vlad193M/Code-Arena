@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LobbyRouteImport } from './routes/lobby'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as authRegisterRouteImport } from './routes/(auth)/register'
+import { Route as MatchIdRouteImport } from './routes/match.$id'
 import { Route as authAuthGithubCallbackRouteImport } from './routes/(auth)/auth/github/callback'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const authRegisterRoute = authRegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MatchIdRoute = MatchIdRouteImport.update({
+  id: '/match/$id',
+  path: '/match/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const authAuthGithubCallbackRoute = authAuthGithubCallbackRouteImport.update({
   id: '/(auth)/auth/github/callback',
   path: '/auth/github/callback',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/lobby': typeof LobbyRoute
   '/login': typeof authLoginRoute
   '/register': typeof authRegisterRoute
+  '/match/$id': typeof MatchIdRoute
   '/auth/github/callback': typeof authAuthGithubCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/lobby': typeof LobbyRoute
   '/login': typeof authLoginRoute
   '/register': typeof authRegisterRoute
+  '/match/$id': typeof MatchIdRoute
   '/auth/github/callback': typeof authAuthGithubCallbackRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/lobby': typeof LobbyRoute
   '/(auth)/login': typeof authLoginRoute
   '/(auth)/register': typeof authRegisterRoute
+  '/match/$id': typeof MatchIdRoute
   '/(auth)/auth/github/callback': typeof authAuthGithubCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/lobby' | '/login' | '/register' | '/auth/github/callback'
+  fullPaths:
+    | '/'
+    | '/lobby'
+    | '/login'
+    | '/register'
+    | '/match/$id'
+    | '/auth/github/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/lobby' | '/login' | '/register' | '/auth/github/callback'
+  to:
+    | '/'
+    | '/lobby'
+    | '/login'
+    | '/register'
+    | '/match/$id'
+    | '/auth/github/callback'
   id:
     | '__root__'
     | '/'
     | '/lobby'
     | '/(auth)/login'
     | '/(auth)/register'
+    | '/match/$id'
     | '/(auth)/auth/github/callback'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   LobbyRoute: typeof LobbyRoute
   authLoginRoute: typeof authLoginRoute
   authRegisterRoute: typeof authRegisterRoute
+  MatchIdRoute: typeof MatchIdRoute
   authAuthGithubCallbackRoute: typeof authAuthGithubCallbackRoute
 }
 
@@ -115,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authRegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/match/$id': {
+      id: '/match/$id'
+      path: '/match/$id'
+      fullPath: '/match/$id'
+      preLoaderRoute: typeof MatchIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(auth)/auth/github/callback': {
       id: '/(auth)/auth/github/callback'
       path: '/auth/github/callback'
@@ -130,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   LobbyRoute: LobbyRoute,
   authLoginRoute: authLoginRoute,
   authRegisterRoute: authRegisterRoute,
+  MatchIdRoute: MatchIdRoute,
   authAuthGithubCallbackRoute: authAuthGithubCallbackRoute,
 }
 export const routeTree = rootRouteImport

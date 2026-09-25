@@ -1,6 +1,8 @@
 import type {
 	LobbyClientToServerEvents,
 	LobbyServerToClientEvents,
+	MatchRoomClientToServerEvents,
+	MatchRoomServerToClientEvents,
 } from "@codearena/shared";
 import type { Server as HttpServer } from "http";
 import type { DefaultEventsMap, ExtendedError, Socket } from "socket.io";
@@ -13,18 +15,26 @@ import { authenticateToken } from "./jwt";
 
 interface SocketData {
 	userId: string;
+	/** The match room this socket subscribed to, so a `disconnect` acts on the
+	 * room the tab was actually in rather than wherever the player is now. */
+	matchId?: string | undefined;
 }
 
+type ClientToServerEvents = LobbyClientToServerEvents &
+	MatchRoomClientToServerEvents;
+type ServerToClientEvents = LobbyServerToClientEvents &
+	MatchRoomServerToClientEvents;
+
 export type AppSocketServer = WebSocketServer<
-	LobbyClientToServerEvents,
-	LobbyServerToClientEvents,
+	ClientToServerEvents,
+	ServerToClientEvents,
 	DefaultEventsMap,
 	SocketData
 >;
 
 export type AppSocket = Socket<
-	LobbyClientToServerEvents,
-	LobbyServerToClientEvents,
+	ClientToServerEvents,
+	ServerToClientEvents,
 	DefaultEventsMap,
 	SocketData
 >;
@@ -53,26 +63,50 @@ function toHandshakeError(error: unknown): ExtendedError {
 	return Object.assign(new Error(message), { data: { kind } });
 }
 
+/** Each feature namespaces its events as `"<feature>:..."` and owns a matching
+ * `"<feature>:error"` channel — this is the only place that needs to know it. */
+function errorEventFor(event: string): "lobby:error" | "match:error" {
+	return event.startsWith("match:") ? "match:error" : "lobby:error";
+}
+
 /** Socket.io discards the promise a handler returns, so an unguarded rejection
- * reaches `unhandledRejection` and one client's failed event ends the server
- * for everyone. */
-export function onSafe<E extends keyof LobbyClientToServerEvents>(
+ * reaches `unhandledRejection` and one client's failed work ends the server for
+ * everyone. Every async callback in a socket context owns its promise here —
+ * including the ones socket.io does not type, such as `disconnect`. */
+export function runGuarded(
+	label: string,
+	work: () => Promise<void>,
+	onError?: (error: unknown) => void,
+): void {
+	void Promise.resolve()
+		.then(work)
+		.catch((error: unknown) => {
+			console.error(`❌ ${label} failed:`, error);
+			onError?.(error);
+		});
+}
+
+/** `runGuarded` for a typed client event, adding the reply the failing socket
+ * needs. */
+export function onSafe<E extends keyof ClientToServerEvents>(
 	socket: AppSocket,
 	event: E,
 	handler: (
-		...args: Parameters<LobbyClientToServerEvents[E]>
+		...args: Parameters<ClientToServerEvents[E]>
 	) => Promise<void> | void,
 ): void {
-	const listener = (...args: Parameters<LobbyClientToServerEvents[E]>) => {
-		Promise.resolve()
-			.then(() => handler(...args))
-			.catch((error: unknown) => {
-				console.error(
-					`❌ Socket ${event} failed (user ${socket.data.userId}):`,
-					error,
-				);
-				socket.emit("lobby:error", { message: toClientError(error).message });
-			});
+	const listener = (...args: Parameters<ClientToServerEvents[E]>) => {
+		runGuarded(
+			`Socket ${event} (user ${socket.data.userId})`,
+			async () => {
+				await handler(...args);
+			},
+			(error) => {
+				socket.emit(errorEventFor(event.toString()), {
+					message: toClientError(error).message,
+				});
+			},
+		);
 	};
 
 	/** The listener type is a conditional on the event name, unresolvable while
