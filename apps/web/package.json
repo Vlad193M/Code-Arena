@@ -11,10 +11,7 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check"
+    "test": "vitest run"
   },
   "dependencies": {
     "@codearena/shared": "workspace:*",
