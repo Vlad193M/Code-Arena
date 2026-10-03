@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import TerminalAlert from "#/ui/TerminalAlert";
+import { formatCountdown, useCountdown } from "../useCountdown";
 import { useMatchRoom } from "../useMatchRoom";
 import PlayerCard from "./PlayerCard";
 
@@ -44,7 +45,11 @@ export default function MatchRoomScreen({
 	currentUserId,
 }: MatchRoomScreenProps) {
 	const navigate = useNavigate();
-	const { room, opponentLeft, error, setReady, leave } = useMatchRoom(matchId);
+	const { room, deadline, opponentLeft, error, setReady, leave } =
+		useMatchRoom(matchId);
+	const remainingMs = useCountdown(
+		room?.status === "IN_PROGRESS" ? deadline : null,
+	);
 
 	function handleLeave() {
 		leave();
@@ -76,8 +81,9 @@ export default function MatchRoomScreen({
 
 	const isHost = room.host.id === currentUserId;
 	const mine = isHost ? room.host : room.guest;
-	const starting = room.status === "IN_PROGRESS";
+	const inProgress = room.status === "IN_PROGRESS";
 	const cancelled = room.status === "CANCELLED";
+	const finished = room.status === "FINISHED";
 	const roomCode = room.id.slice(0, 6).toUpperCase();
 
 	return (
@@ -147,9 +153,22 @@ export default function MatchRoomScreen({
 								</TerminalAlert>
 							) : null}
 
-							{starting ? (
-								<TerminalAlert tone="success">
-									BOTH PLAYERS READY — MATCH STARTING
+							{inProgress ? (
+								<div className="flex items-baseline justify-between gap-4 border border-(--crt-green) bg-(--crt-green)/8 px-4.5 py-3.5 text-(--crt-green)">
+									<span className="text-sm tracking-[0.12em]">
+										MATCH IN PROGRESS
+									</span>
+									<span className="text-[28px] font-semibold tabular-nums tracking-[0.08em]">
+										{remainingMs === null
+											? "--:--"
+											: formatCountdown(remainingMs)}
+									</span>
+								</div>
+							) : null}
+
+							{finished ? (
+								<TerminalAlert tone="error">
+									{"> "}TIME'S UP — MATCH OVER
 								</TerminalAlert>
 							) : null}
 
@@ -157,9 +176,9 @@ export default function MatchRoomScreen({
 								<TerminalAlert tone="error">{error}</TerminalAlert>
 							) : null}
 
-							{cancelled ? <BackToLobbyButton /> : null}
+							{cancelled || finished ? <BackToLobbyButton /> : null}
 
-							{mine && !starting && !cancelled ? (
+							{mine && room.status === "WAITING" ? (
 								<div className="flex flex-wrap gap-3">
 									<button
 										type="button"

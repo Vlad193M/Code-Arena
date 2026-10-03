@@ -26,6 +26,11 @@ export const matchRoomSchema = z
 		status: matchStatusSchema,
 		host: matchRoomPlayerSchema,
 		guest: matchRoomPlayerSchema.nullable(),
+		endsAt: z.iso
+			.datetime()
+			.nullable()
+			.meta({ example: "2026-10-03T12:00:00.000Z" }),
+		serverNow: z.iso.datetime().meta({ example: "2026-10-03T12:00:00.000Z" }),
 	})
 	.meta({
 		id: "MatchRoom",

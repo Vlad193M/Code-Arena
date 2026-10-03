@@ -7,6 +7,7 @@ import { createWebSocketServer } from "./lib/socket";
 import {
 	registerLobbyHandlers,
 	registerMatchRoomHandlers,
+	resumeMatchTimers,
 } from "./modules/match/match.socket";
 
 async function start() {
@@ -20,6 +21,8 @@ async function start() {
 			registerLobbyHandlers,
 			registerMatchRoomHandlers,
 		]);
+
+		await resumeMatchTimers();
 
 		/** `io.close` also closes the HTTP server it was attached to. */
 		installCrashHandlers(async () => {

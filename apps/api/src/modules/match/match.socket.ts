@@ -110,6 +110,24 @@ function leaveRoomMembership(socket: AppSocket, matchId: string): void {
 	socket.data.matchId = undefined;
 }
 
+function scheduleMatchFinish(matchId: string, endsAt: Date): void {
+	const timer = setTimeout(() => {
+		runGuarded(`Match finish (match ${matchId})`, async () => {
+			const room = await MatchService.finishMatch(matchId);
+			if (room) emitMatchRoom(room);
+		});
+	}, endsAt.getTime() - Date.now());
+
+	timer.unref();
+}
+
+/** Timers live only in this process, so a restart must re-arm them. */
+export async function resumeMatchTimers(): Promise<void> {
+	for (const { id, endsAt } of await MatchService.listRunningMatches()) {
+		scheduleMatchFinish(id, endsAt);
+	}
+}
+
 export function registerMatchRoomHandlers(socket: AppSocket) {
 	onSafe(socket, "match:subscribe", async (rawMatchId) => {
 		const matchId = matchIdEventSchema.parse(rawMatchId);
@@ -142,6 +160,9 @@ export function registerMatchRoomHandlers(socket: AppSocket) {
 			socket.data.userId,
 			readyEventSchema.parse(rawReady),
 		);
+		if (room.status === "IN_PROGRESS" && room.endsAt) {
+			scheduleMatchFinish(matchId, new Date(room.endsAt));
+		}
 		emitMatchRoom(room);
 	});
 
