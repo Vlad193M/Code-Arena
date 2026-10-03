@@ -44,6 +44,7 @@ model Match {
   createdAt        DateTime          @default(now())
   startedAt        DateTime?
   endedAt          DateTime?
+  endsAt           DateTime?
   activeMatchSlots ActiveMatchSlot[]
 
   @@index([status, createdAt])

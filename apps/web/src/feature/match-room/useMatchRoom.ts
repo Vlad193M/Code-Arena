@@ -4,14 +4,23 @@ import { getSocket } from "#/api/socket";
 
 export type MatchRoomView = {
 	room: MatchRoom | undefined;
+	deadline: number | null;
 	opponentLeft: boolean;
 	error: string | undefined;
 	setReady: (ready: boolean) => void;
 	leave: () => void;
 };
 
+/** On the `performance.now()` clock, so the client's wall clock never shifts it. */
+function toDeadline({ endsAt, serverNow }: MatchRoom): number | null {
+	if (!endsAt) return null;
+
+	return performance.now() + (Date.parse(endsAt) - Date.parse(serverNow));
+}
+
 export function useMatchRoom(matchId: string): MatchRoomView {
 	const [room, setRoom] = useState<MatchRoom | undefined>(undefined);
+	const [deadline, setDeadline] = useState<number | null>(null);
 	const [opponentLeft, setOpponentLeft] = useState(false);
 	const [error, setError] = useState<string | undefined>(undefined);
 
@@ -25,6 +34,7 @@ export function useMatchRoom(matchId: string): MatchRoomView {
 			}
 			setError(undefined);
 			setRoom(next);
+			setDeadline(toDeadline(next));
 		};
 		const onOpponentLeft = () => setOpponentLeft(true);
 		const onError = ({ message }: MatchRoomError) => setError(message);
@@ -59,5 +69,5 @@ export function useMatchRoom(matchId: string): MatchRoomView {
 		getSocket().emit("match:leave", matchId);
 	}, [matchId]);
 
-	return { room, opponentLeft, error, setReady, leave };
+	return { room, deadline, opponentLeft, error, setReady, leave };
 }

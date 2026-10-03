@@ -38,6 +38,7 @@ function withMatchLock<T>(
 const matchRoomSelect = {
 	id: true,
 	createdAt: true,
+	endsAt: true,
 	status: true,
 	hostId: true,
 	guestId: true,
@@ -58,6 +59,8 @@ function toMatchRoom(match: SelectedMatchRoom): MatchRoom {
 	return {
 		id: match.id,
 		status: match.status,
+		endsAt: match.endsAt?.toISOString() ?? null,
+		serverNow: new Date().toISOString(),
 		host: {
 			...match.host,
 			ready: readyByUserId.get(match.hostId) ?? false,
@@ -274,6 +277,8 @@ export async function getMatchRoom(
 	return toMatchRoom(match);
 }
 
+const MATCH_DURATION_MS = 15 * 60 * 1000;
+
 export async function setReady(
 	matchId: string,
 	userId: string,
@@ -299,16 +304,22 @@ export async function setReady(
 			);
 			const bothReady = slots.length === 2 && slots.every((slot) => slot.ready);
 
-			if (bothReady) {
-				await tx.match.update({
-					where: { id: matchId },
-					data: { status: "IN_PROGRESS", startedAt: new Date() },
-				});
+			if (!bothReady) {
+				return toMatchRoom({ ...match, activeMatchSlots: slots });
 			}
+
+			const startedAt = new Date();
+			const endsAt = new Date(startedAt.getTime() + MATCH_DURATION_MS);
+
+			await tx.match.update({
+				where: { id: matchId },
+				data: { status: "IN_PROGRESS", startedAt, endsAt },
+			});
 
 			return toMatchRoom({
 				...match,
-				status: bothReady ? "IN_PROGRESS" : match.status,
+				status: "IN_PROGRESS",
+				endsAt,
 				activeMatchSlots: slots,
 			});
 		});
@@ -409,4 +420,35 @@ export async function leaveMatchRoom(
 			? releaseGuestSlot(tx, match, userId)
 			: null;
 	});
+}
+
+/** `null` when another caller already finished the match. */
+export async function finishMatch(matchId: string): Promise<MatchRoom | null> {
+	return withMatchLock(matchId, async (tx) => {
+		const { count } = await tx.match.updateMany({
+			where: { id: matchId, status: "IN_PROGRESS" },
+			data: { status: "FINISHED", endedAt: new Date() },
+		});
+		if (count === 0) {
+			return null;
+		}
+
+		await tx.activeMatchSlot.deleteMany({ where: { matchId } });
+
+		return matchRoomOrThrow(matchId, tx);
+	});
+}
+
+type RunningMatch = { id: string; endsAt: Date };
+
+export async function listRunningMatches(): Promise<RunningMatch[]> {
+	const matches = await prisma.match.findMany({
+		where: { status: "IN_PROGRESS" },
+		select: { id: true, endsAt: true },
+	});
+
+	return matches.map(({ id, endsAt }) => ({
+		id,
+		endsAt: endsAt ?? new Date(),
+	}));
 }
