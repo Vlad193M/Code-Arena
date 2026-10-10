@@ -21,6 +21,7 @@ model User {
   createdAt       DateTime         @default(now())
   hostedMatches   Match[]          @relation("MatchHost")
   joinedMatches   Match[]          @relation("MatchGuest")
+  wonMatches      Match[]          @relation("MatchWinner")
   activeMatchSlot ActiveMatchSlot?
 }
 
@@ -40,6 +41,9 @@ model Match {
 
   guestId String?
   guest   User?   @relation("MatchGuest", fields: [guestId], references: [id], onDelete: SetNull)
+
+  winnerId String?
+  winner   User?   @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
 
   createdAt        DateTime          @default(now())
   startedAt        DateTime?

@@ -1,7 +1,11 @@
-import type { LobbyMatch, MatchRoom } from "@codearena/shared";
+import type { LobbyMatch, MatchRoom, PlayerPresence } from "@codearena/shared";
 import type { AppSocket } from "../../lib/socket";
 import { getWebSocket, onSafe, runGuarded } from "../../lib/socket";
-import { matchIdEventSchema, readyEventSchema } from "./match.schemas";
+import {
+	activityEventSchema,
+	matchIdEventSchema,
+	readyEventSchema,
+} from "./match.schemas";
 import type { MatchRoomLeaveResult } from "./match.service";
 import * as MatchService from "./match.service";
 
@@ -27,7 +31,7 @@ function sequenced<T>(task: () => T | Promise<T>): Promise<T> {
 }
 
 /** A broadcast has no caller to report to, so a lost one is logged, not thrown. */
-function broadcast(emit: () => void): void {
+function broadcast(emit: () => void | Promise<void>): void {
 	void sequenced(emit).catch((error: unknown) => {
 		console.error("❌ Broadcast failed:", error);
 	});
@@ -83,6 +87,11 @@ export function broadcastMatchClosed(room: MatchRoom): void {
 /** The one participant left behind learns the same way regardless of whether
  * the other side clicked "leave" or simply dropped off the socket. */
 function broadcastLeave(result: MatchRoomLeaveResult): void {
+	if (result.event === "forfeited") {
+		emitMatchRoom(result.room);
+		return;
+	}
+
 	const { room } = result;
 
 	if (room) {
@@ -121,6 +130,72 @@ function scheduleMatchFinish(matchId: string, endsAt: Date): void {
 	timer.unref();
 }
 
+/** A timer only acts on the entry it created, so a second drop never inherits
+ * the first one's shorter deadline. */
+const gracePeriods = new Map<string, Date>();
+
+function gracePeriodKey(userId: string, matchId: string) {
+	return `${matchId}:${userId}`;
+}
+
+/** A tab left open on an earlier match stays in the user room. */
+async function matchSockets(userId: string, matchId: string) {
+	const sockets = await getWebSocket().in(userRoomName(userId)).fetchSockets();
+
+	return sockets.filter((s) => s.data.matchId === matchId);
+}
+
+async function readPresence(
+	userId: string,
+	matchId: string,
+): Promise<PlayerPresence> {
+	const sockets = await matchSockets(userId, matchId);
+
+	if (sockets.length > 0) {
+		return {
+			userId,
+			status: "connected",
+			active: sockets.some((s) => s.data.active !== false),
+		};
+	}
+
+	return {
+		userId,
+		status: "disconnected",
+		graceEndsAt:
+			gracePeriods.get(gracePeriodKey(userId, matchId))?.toISOString() ?? null,
+		serverNow: new Date().toISOString(),
+	};
+}
+
+function broadcastPresence(userId: string, matchId: string): void {
+	broadcast(async () => {
+		getWebSocket()
+			.to(matchRoomName(matchId))
+			.emit("match:presence", await readPresence(userId, matchId));
+	});
+}
+
+function startGracePeriod(userId: string, matchId: string): void {
+	const key = gracePeriodKey(userId, matchId);
+	const endsAt = new Date(Date.now() + RECONNECT_GRACE_MS);
+	gracePeriods.set(key, endsAt);
+
+	const timer = setTimeout(() => {
+		if (gracePeriods.get(key) !== endsAt) {
+			return;
+		}
+		gracePeriods.delete(key);
+
+		runGuarded(`Match grace period (user ${userId})`, async () => {
+			const result = await MatchService.leaveMatchRoom(userId, matchId);
+			if (result) broadcastLeave(result);
+		});
+	}, RECONNECT_GRACE_MS);
+
+	timer.unref();
+}
+
 /** Timers live only in this process, so a restart must re-arm them. */
 export async function resumeMatchTimers(): Promise<void> {
 	for (const { id, endsAt } of await MatchService.listRunningMatches()) {
@@ -141,12 +216,32 @@ export function registerMatchRoomHandlers(socket: AppSocket) {
 		await sequenced(async () => {
 			await socket.join([matchRoomName(matchId), userRoomName(userId)]);
 			socket.data.matchId = matchId;
+			gracePeriods.delete(gracePeriodKey(userId, matchId));
 
-			socket.emit(
-				"match:room",
-				await MatchService.getMatchRoom(matchId, userId),
-			);
+			const room = await MatchService.getMatchRoom(matchId, userId);
+			socket.emit("match:room", room);
+
+			const opponentId =
+				room.host.id === userId ? room.guest?.id : room.host.id;
+			if (opponentId) {
+				socket.emit("match:presence", await readPresence(opponentId, matchId));
+			}
+			socket
+				.to(matchRoomName(matchId))
+				.emit("match:presence", await readPresence(userId, matchId));
 		});
+	});
+
+	onSafe(socket, "match:activity", (rawActive) => {
+		const active = activityEventSchema.parse(rawActive);
+		if (socket.data.active === active) {
+			return;
+		}
+
+		socket.data.active = active;
+		if (socket.data.matchId) {
+			broadcastPresence(socket.data.userId, socket.data.matchId);
+		}
 	});
 
 	onSafe(socket, "match:unsubscribe", (rawMatchId) => {
@@ -190,20 +285,11 @@ export function registerMatchRoomHandlers(socket: AppSocket) {
 			return;
 		}
 
-		const timer = setTimeout(() => {
-			runGuarded(`Match room disconnect (user ${userId})`, async () => {
-				const sockets = await getWebSocket()
-					.in(userRoomName(userId))
-					.fetchSockets();
-				if (sockets.length > 0) {
-					return;
-				}
-
-				const result = await MatchService.leaveMatchRoom(userId, matchId);
-				if (result) broadcastLeave(result);
-			});
-		}, RECONNECT_GRACE_MS);
-
-		timer.unref();
+		runGuarded(`Match room disconnect (user ${userId})`, async () => {
+			if ((await matchSockets(userId, matchId)).length === 0) {
+				startGracePeriod(userId, matchId);
+			}
+			broadcastPresence(userId, matchId);
+		});
 	});
 }

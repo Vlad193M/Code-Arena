@@ -45,11 +45,28 @@ export default function MatchRoomScreen({
 	currentUserId,
 }: MatchRoomScreenProps) {
 	const navigate = useNavigate();
-	const { room, deadline, opponentLeft, error, setReady, leave } =
-		useMatchRoom(matchId);
+	const {
+		room,
+		deadline,
+		presenceByUserId,
+		opponentLeft,
+		error,
+		setReady,
+		leave,
+	} = useMatchRoom(matchId);
 	const remainingMs = useCountdown(
 		room?.status === "IN_PROGRESS" ? deadline : null,
 	);
+
+	const isHost = room?.host.id === currentUserId;
+	const opponent = isHost ? room?.guest : room?.host;
+	const opponentPresence = opponent ? presenceByUserId[opponent.id] : undefined;
+	const opponentDropped =
+		opponentPresence?.status === "disconnected" &&
+		(room?.status === "WAITING" || room?.status === "IN_PROGRESS")
+			? opponentPresence
+			: null;
+	const graceRemainingMs = useCountdown(opponentDropped?.graceDeadline ?? null);
 
 	function handleLeave() {
 		leave();
@@ -79,11 +96,11 @@ export default function MatchRoomScreen({
 		);
 	}
 
-	const isHost = room.host.id === currentUserId;
 	const mine = isHost ? room.host : room.guest;
 	const inProgress = room.status === "IN_PROGRESS";
 	const cancelled = room.status === "CANCELLED";
 	const finished = room.status === "FINISHED";
+	const won = room.winnerId === currentUserId;
 	const roomCode = room.id.slice(0, 6).toUpperCase();
 
 	return (
@@ -113,6 +130,7 @@ export default function MatchRoomScreen({
 									label="SLOT 1 — HOST"
 									player={room.host}
 									isMe={isHost}
+									presence={isHost ? undefined : opponentPresence}
 								/>
 
 								<div className="flex items-center justify-center px-2 text-lg font-semibold tracking-[0.1em] text-(--crt-dim)">
@@ -124,6 +142,7 @@ export default function MatchRoomScreen({
 										label="SLOT 2 — CHALLENGER"
 										player={room.guest}
 										isMe={!isHost}
+										presence={isHost ? opponentPresence : undefined}
 									/>
 								) : (
 									<div className="flex min-w-0 flex-col gap-3 border border-(--crt-dim)/60 border-dashed p-4.5">
@@ -151,6 +170,15 @@ export default function MatchRoomScreen({
 								<TerminalAlert tone="error">
 									{"> "}OPPONENT LEFT THE ROOM — slot reopened
 								</TerminalAlert>
+							) : opponentDropped ? (
+								<TerminalAlert tone="error">
+									{"> "}OPPONENT DISCONNECTED — waiting{" "}
+									{graceRemainingMs === null
+										? ""
+										: `${formatCountdown(graceRemainingMs)} `}
+									for them to reconnect
+									{inProgress ? ", then they forfeit" : ""}
+								</TerminalAlert>
 							) : null}
 
 							{inProgress ? (
@@ -167,8 +195,11 @@ export default function MatchRoomScreen({
 							) : null}
 
 							{finished ? (
-								<TerminalAlert tone="error">
-									{"> "}TIME'S UP — MATCH OVER
+								<TerminalAlert tone={won ? "success" : "error"}>
+									{"> "}
+									{room.winnerId === null
+										? "TIME'S UP — MATCH OVER"
+										: `MATCH OVER — ${won ? "YOU WIN" : "YOU LOSE"}`}
 								</TerminalAlert>
 							) : null}
 

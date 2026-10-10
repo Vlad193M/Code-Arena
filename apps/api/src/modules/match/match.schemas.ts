@@ -9,3 +9,4 @@ export type MatchIdParams = z.infer<typeof matchIdParamsSchema>;
  * the client we ship, and nothing stops another one emitting anything. */
 export const matchIdEventSchema = matchIdParamsSchema.shape.id;
 export const readyEventSchema = z.boolean();
+export const activityEventSchema = z.boolean();
