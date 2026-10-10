@@ -31,12 +31,31 @@ export const matchRoomSchema = z
 			.nullable()
 			.meta({ example: "2026-10-03T12:00:00.000Z" }),
 		serverNow: z.iso.datetime().meta({ example: "2026-10-03T12:00:00.000Z" }),
+		winnerId: z
+			.string()
+			.nullable()
+			.meta({ example: "clx9z8y7x6w5v4u3t2s1r0q" }),
 	})
 	.meta({
 		id: "MatchRoom",
 		description: "Presence and ready state of a match",
 	});
 export type MatchRoom = z.infer<typeof matchRoomSchema>;
+
+export const playerPresenceSchema = z.discriminatedUnion("status", [
+	z.object({
+		userId: z.string(),
+		status: z.literal("connected"),
+		active: z.boolean(),
+	}),
+	z.object({
+		userId: z.string(),
+		status: z.literal("disconnected"),
+		graceEndsAt: z.iso.datetime().nullable(),
+		serverNow: z.iso.datetime(),
+	}),
+]);
+export type PlayerPresence = z.infer<typeof playerPresenceSchema>;
 
 /** Sent to the one socket whose event failed, never broadcast. */
 export const matchRoomErrorSchema = z
@@ -52,6 +71,7 @@ export type MatchRoomError = z.infer<typeof matchRoomErrorSchema>;
 export interface MatchRoomServerToClientEvents {
 	"match:room": (room: MatchRoom) => void;
 	"match:opponent_left": () => void;
+	"match:presence": (presence: PlayerPresence) => void;
 	"match:error": (error: MatchRoomError) => void;
 }
 
@@ -60,4 +80,5 @@ export interface MatchRoomClientToServerEvents {
 	"match:unsubscribe": (matchId: string) => void;
 	"match:set_ready": (matchId: string, ready: boolean) => void;
 	"match:leave": (matchId: string) => void;
+	"match:activity": (active: boolean) => void;
 }

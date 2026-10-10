@@ -42,6 +42,7 @@ const matchRoomSelect = {
 	status: true,
 	hostId: true,
 	guestId: true,
+	winnerId: true,
 	host: { select: { id: true, username: true } },
 	guest: { select: { id: true, username: true } },
 	activeMatchSlots: { select: { userId: true, ready: true } },
@@ -61,6 +62,7 @@ function toMatchRoom(match: SelectedMatchRoom): MatchRoom {
 		status: match.status,
 		endsAt: match.endsAt?.toISOString() ?? null,
 		serverNow: new Date().toISOString(),
+		winnerId: match.winnerId,
 		host: {
 			...match.host,
 			ready: readyByUserId.get(match.hostId) ?? false,
@@ -344,6 +346,11 @@ export type MatchRoomLeaveResult =
 			matchId: string;
 			room: MatchRoom;
 			lobbyMatch: LobbyMatch;
+	  }
+	| {
+			event: "forfeited";
+			matchId: string;
+			room: MatchRoom;
 	  };
 
 async function cancelAsHost(
@@ -393,22 +400,49 @@ async function releaseGuestSlot(
 	};
 }
 
-/** Shared by a deliberate `match:leave` and a bare socket `disconnect` — both
- * mean the same thing to the room. Only a `WAITING` match has a room worth
- * leaving cleanly; once a match is `IN_PROGRESS` a dropped connection is a
- * gameplay concern, not a room one. A `matchId` the caller no longer holds a
- * slot in makes this a no-op, so a stale tab cannot take down the match its
- * player has since moved to. */
+async function forfeitAsPlayer(
+	tx: Prisma.TransactionClient,
+	match: SelectedMatchRoom,
+	winnerId: string,
+): Promise<MatchRoomLeaveResult> {
+	await tx.match.update({
+		where: { id: match.id },
+		data: { status: "FINISHED", endedAt: new Date(), winnerId },
+	});
+	await tx.activeMatchSlot.deleteMany({ where: { matchId: match.id } });
+
+	return {
+		event: "forfeited",
+		matchId: match.id,
+		room: toMatchRoom({
+			...match,
+			status: "FINISHED",
+			winnerId,
+			activeMatchSlots: [],
+		}),
+	};
+}
+
+/** Shared by a deliberate `match:leave` and an expired reconnect grace period
+ * — both mean the same thing to the room. Walking out of a `WAITING` room frees
+ * the slot; walking out of an `IN_PROGRESS` match concedes it. A `matchId` the
+ * caller no longer holds a slot in makes this a no-op, so a stale tab cannot
+ * take down the match its player has since moved to. */
 export async function leaveMatchRoom(
 	userId: string,
 	matchId: string,
 ): Promise<MatchRoomLeaveResult | null> {
 	return withMatchLock(matchId, async (tx) => {
 		const match = await readMatchRoom(matchId, tx);
-		if (!match || match.status !== "WAITING") {
+		if (!match?.activeMatchSlots.some((slot) => slot.userId === userId)) {
 			return null;
 		}
-		if (!match.activeMatchSlots.some((slot) => slot.userId === userId)) {
+
+		if (match.status === "IN_PROGRESS" && match.guestId) {
+			const winnerId = userId === match.hostId ? match.guestId : match.hostId;
+			return forfeitAsPlayer(tx, match, winnerId);
+		}
+		if (match.status !== "WAITING") {
 			return null;
 		}
 

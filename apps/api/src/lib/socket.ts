@@ -18,6 +18,7 @@ interface SocketData {
 	/** The match room this socket subscribed to, so a `disconnect` acts on the
 	 * room the tab was actually in rather than wherever the player is now. */
 	matchId?: string | undefined;
+	active?: boolean | undefined;
 }
 
 type ClientToServerEvents = LobbyClientToServerEvents &
