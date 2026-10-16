@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { apiClient } from "#/api/client";
 import { requireUser } from "#/feature/auth/guards";
@@ -12,7 +12,6 @@ export const Route = createFileRoute("/")({
 
 function App() {
 	const { user } = useAuth();
-	const navigate = useNavigate();
 	const [pending, setPending] = useState(false);
 
 	async function handleLogout() {
@@ -25,8 +24,6 @@ function App() {
 			console.error("[auth] logout request failed", cause);
 		} finally {
 			clearSession();
-			// Replace, not push: Back must not aim at the private page.
-			await navigate({ to: "/login", replace: true });
 		}
 	}
 

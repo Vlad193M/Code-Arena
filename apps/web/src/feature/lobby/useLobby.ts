@@ -3,6 +3,7 @@ import { lobbyMatchSchema } from "@codearena/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { apiClient } from "#/api/client";
+import { toThrownErrorMessage } from "#/api/errors";
 import { getSocket } from "#/api/socket";
 import { type LobbyAction, lobbyReducer } from "./lobbyState";
 
@@ -73,7 +74,7 @@ export function useLobby(): LobbyView {
 				else if (outcome) dispatch(outcome);
 			} catch (cause) {
 				console.error("[lobby] command failed", cause);
-				setError("Connection failed");
+				setError(toThrownErrorMessage(cause));
 			} finally {
 				setPending(false);
 			}

@@ -63,7 +63,8 @@ flowchart TD
     A -->|"false — denied by io.use"| K{"data.kind = unauthorized<br/>and no attempt made yet?"}
     K -->|"no"| L["Log and stop"]
     K -->|"yes"| R["ensureRefreshed()"]
-    R -->|"refresh failed"| X["clearSession() →<br/>bridge disconnects, user logs in again"]
+    R -->|"rejected — server refused the cookie"| X["clearSession() →<br/>bridge disconnects, user logs in again"]
+    R -->|"unreachable or failed — no verdict"| U["Log and stop, session kept:<br/>a later successful refresh<br/>reconnects through the bridge"]
     R -->|"new access token"| Q{"still authenticated<br/>after the await?"}
     Q -->|"no — logout raced us"| Y["Stop: the bridge already decided"]
     Q -->|"yes"| C["connect() — one attempt"]
