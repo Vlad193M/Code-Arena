@@ -22,6 +22,11 @@ const ANONYMOUS: AuthState = {
 	accessToken: undefined,
 };
 
+let epoch = 0;
+
+/** Bumps on every session change, so async work can tell its result went stale. */
+export const getSessionEpoch = () => epoch;
+
 let state: AuthState = UNKNOWN;
 const listeners = new Set<() => void>();
 
@@ -42,12 +47,14 @@ export function setSession(session: unknown) {
 	assertClient();
 	const { accessToken, user } = authResponseSchema.parse(session);
 	state = { status: "authenticated", accessToken, user };
+	++epoch;
 	emit();
 }
 
 export function clearSession() {
 	assertClient();
 	state = ANONYMOUS;
+	++epoch;
 	emit();
 }
 

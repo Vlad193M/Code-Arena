@@ -6,10 +6,16 @@ import { getAuthState } from "./store";
  * Settles `unknown` before a guard reads it: the access token lives in memory
  * only, so a cold load must re-mint it from the refresh cookie or a returning
  * user looks anonymous. Settled states skip it — guards run on every navigation.
+ *
+ * A refresh without a verdict throws instead of reading as anonymous: the cookie
+ * may be fine, so the route error screen offers a retry rather than a login.
  */
 async function settledAuth() {
 	if (getAuthState().status === "unknown") {
-		await ensureRefreshed();
+		const outcome = await ensureRefreshed();
+		if (outcome.status === "unreachable" || outcome.status === "failed") {
+			throw outcome.cause;
+		}
 	}
 
 	return getAuthState();

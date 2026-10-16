@@ -2,13 +2,13 @@ import { AUTH_LIMITS, registerSchema } from "@codearena/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { apiClient } from "#/api/client";
+import { toApiErrorMessage, toThrownErrorMessage } from "#/api/errors";
 import TerminalAlert from "#/ui/TerminalAlert";
 import TerminalButton from "#/ui/TerminalButton";
 import type { TerminalCheck } from "#/ui/TerminalChecks";
 import TerminalField from "#/ui/TerminalField";
 import TerminalFrame from "#/ui/TerminalFrame";
 import { check, missing } from "../checks";
-import { toApiErrorMessage, toThrownErrorMessage } from "../errors";
 import { setSession } from "../store";
 import GithubAuthButton from "./GithubAuthButton";
 

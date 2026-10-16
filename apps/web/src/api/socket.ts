@@ -75,16 +75,13 @@ async function handleConnectError(error: Error) {
 
 	recovering = true;
 
-	let refreshed = false;
-	try {
-		refreshed = await ensureRefreshed();
-	} catch (cause) {
-		console.error("[ws] token refresh failed", cause);
-	}
+	const outcome = await ensureRefreshed();
 
-	// A failed refresh has already cleared the session; logout can also land
-	// while it is in flight. Either way the socket does not decide that itself.
-	if (!refreshed || getAuthState().status !== "authenticated") return;
+	if (outcome.status === "unreachable" || outcome.status === "failed") {
+		console.error(`[ws] token refresh ${outcome.status}`, outcome.cause);
+	}
+	if (outcome.status !== "refreshed") return;
+	if (getAuthState().status !== "authenticated") return;
 
 	instance.connect();
 }
