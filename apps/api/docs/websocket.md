@@ -64,14 +64,24 @@ flowchart TD
     K -->|"no"| L["Log and stop"]
     K -->|"yes"| R["ensureRefreshed()"]
     R -->|"rejected — server refused the cookie"| X["clearSession() →<br/>bridge disconnects, user logs in again"]
-    R -->|"unreachable or failed — no verdict"| U["Log and stop, session kept:<br/>a later successful refresh<br/>reconnects through the bridge"]
+    R -->|"unreachable or failed — no verdict"| U["Log, session kept:<br/>wait 1s, 2s, 4s … capped at 30s"]
+    U --> R
     R -->|"new access token"| Q{"still authenticated<br/>after the await?"}
     Q -->|"no — logout raced us"| Y["Stop: the bridge already decided"]
     Q -->|"yes"| C["connect() — one attempt"]
     C --> D{"handshake result"}
     D -->|"denied again"| E
-    D -->|"accepted"| OK["connect → attempt budget resets"]
+    D -->|"accepted"| OK["connect → attempt budget<br/>and backoff reset"]
 ```
+
+A refresh without a verdict says nothing about the cookie, so the client keeps
+retrying the refresh itself rather than giving up: a page that makes no HTTP
+calls, such as the match room, has nothing else that would trigger one. The
+backoff caps the load on `/api/auth/refresh` at one request per 30 seconds
+while the API is down. A successful refresh from any other consumer
+short-circuits the wait — `setSession` notifies the bridge, which calls
+`connect()`, and the accepted handshake clears the pending retry. Logout clears
+it too.
 
 ## Failures after the handshake
 
