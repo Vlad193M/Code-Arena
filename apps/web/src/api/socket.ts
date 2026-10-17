@@ -22,8 +22,20 @@ export type AppSocket = Socket<
 	LobbyClientToServerEvents & MatchRoomClientToServerEvents
 >;
 
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 30_000;
+
 let socket: AppSocket | undefined;
 let recovering = false;
+let retryAttempt = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+function resetRecovery() {
+	clearTimeout(retryTimer);
+	retryTimer = undefined;
+	retryAttempt = 0;
+	recovering = false;
+}
 
 function createSocket(): AppSocket {
 	const instance = io(import.meta.env.VITE_API_URL, {
@@ -31,9 +43,7 @@ function createSocket(): AppSocket {
 		auth: (cb) => cb({ accessToken: getAuthState().accessToken }),
 	});
 
-	instance.on("connect", () => {
-		recovering = false;
-	});
+	instance.on("connect", resetRecovery);
 	instance.on("connect_error", handleConnectError);
 
 	return instance;
@@ -59,7 +69,7 @@ export function getSocket(): AppSocket {
  *
  * Flow and failure classes: `apps/api/docs/websocket.md`.
  */
-async function handleConnectError(error: Error) {
+function handleConnectError(error: Error) {
 	const instance = getSocket();
 	if (instance.active) return;
 
@@ -74,16 +84,34 @@ async function handleConnectError(error: Error) {
 	}
 
 	recovering = true;
+	void recover();
+}
 
+/**
+ * A refresh without a verdict is retried on a capped exponential backoff, so a
+ * page that makes no HTTP calls still recovers once the API answers again.
+ */
+async function recover() {
 	const outcome = await ensureRefreshed();
 
 	if (outcome.status === "unreachable" || outcome.status === "failed") {
 		console.error(`[ws] token refresh ${outcome.status}`, outcome.cause);
+		scheduleRecovery();
+		return;
 	}
 	if (outcome.status !== "refreshed") return;
 	if (getAuthState().status !== "authenticated") return;
 
-	instance.connect();
+	getSocket().connect();
+}
+
+function scheduleRecovery() {
+	const delay = Math.min(RETRY_BASE_MS * 2 ** retryAttempt, RETRY_MAX_MS);
+	retryAttempt += 1;
+	retryTimer = setTimeout(() => {
+		retryTimer = undefined;
+		void recover();
+	}, delay);
 }
 
 /** Auth owns the connection: authenticated means connected. */
@@ -93,7 +121,7 @@ function syncWithAuth() {
 	if (status === "authenticated") {
 		getSocket().connect();
 	} else if (status === "anonymous") {
-		recovering = false;
+		resetRecovery();
 		getSocket().disconnect();
 	}
 }
