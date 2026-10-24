@@ -3,6 +3,7 @@ import TerminalAlert from "#/ui/TerminalAlert";
 import { formatCountdown, useCountdown } from "../useCountdown";
 import { useMatchRoom } from "../useMatchRoom";
 import PlayerCard from "./PlayerCard";
+import ProblemPanel from "./ProblemPanel";
 
 type MatchRoomScreenProps = {
 	matchId: string;
@@ -202,6 +203,8 @@ export default function MatchRoomScreen({
 										: `MATCH OVER — ${won ? "YOU WIN" : "YOU LOSE"}`}
 								</TerminalAlert>
 							) : null}
+
+							{room.problem ? <ProblemPanel problem={room.problem} /> : null}
 
 							{error ? (
 								<TerminalAlert tone="error">{error}</TerminalAlert>

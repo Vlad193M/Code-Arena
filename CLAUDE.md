@@ -20,6 +20,7 @@ docker compose up -d     # start Postgres
 # apps/api
 pnpm db:migrate          # prisma migrate dev --name <name>
 pnpm db:generate         # regenerate client after schema change
+pnpm db:seed             # load problems — required: a match cannot be created without one; not run by db:reset
 pnpm db:studio
 pnpm typecheck           # tsc --noEmit — run after schema/type changes
 ```

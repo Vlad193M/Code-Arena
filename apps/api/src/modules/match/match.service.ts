@@ -1,7 +1,14 @@
-import type { LobbyMatch, MatchRoom } from "@codearena/shared";
+import {
+	type LobbyMatch,
+	type MatchProblem,
+	type MatchRoom,
+	problemSignatureSchema,
+	testCaseDataSchema,
+} from "@codearena/shared";
 import { prisma } from "../../db/prisma.client";
 import { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../lib/errors";
+import { parseOrThrow } from "../../lib/validation";
 
 const lobbyMatchSelect = {
 	id: true,
@@ -46,12 +53,59 @@ const matchRoomSelect = {
 	host: { select: { id: true, username: true } },
 	guest: { select: { id: true, username: true } },
 	activeMatchSlots: { select: { userId: true, ready: true } },
+	problem: {
+		select: {
+			slug: true,
+			title: true,
+			difficulty: true,
+			statement: true,
+			timeLimitMs: true,
+			memoryLimitMb: true,
+			signature: true,
+			/** Hidden cases are never read here, so no mapping slip can send them. */
+			testCases: {
+				where: { isHidden: false },
+				orderBy: { order: "asc" },
+				select: { input: true, expectedOutput: true },
+			},
+		},
+	},
 } satisfies Prisma.MatchSelect;
 
 type SelectedMatchRoom = Prisma.MatchGetPayload<{
 	select: typeof matchRoomSelect;
 }>;
 
+/** Fields are listed one by one, never spread: anything later added to the
+ * select (a reference solution, say) must not reach players by default. */
+function toMatchProblem(problem: SelectedMatchRoom["problem"]): MatchProblem {
+	const signature = parseOrThrow(
+		problemSignatureSchema,
+		problem.signature,
+		`Problem ${problem.slug}: stored signature is invalid`,
+	);
+	const exampleSchema = testCaseDataSchema(signature);
+
+	return {
+		title: problem.title,
+		difficulty: problem.difficulty,
+		statement: problem.statement,
+		timeLimitMs: problem.timeLimitMs,
+		memoryLimitMb: problem.memoryLimitMb,
+		signature,
+		examples: problem.testCases.map((testCase, index) =>
+			parseOrThrow(
+				exampleSchema,
+				testCase,
+				`Problem ${problem.slug}: stored example #${index + 1} does not match its signature`,
+			),
+		),
+	};
+}
+
+/** Parses the stored problem, so a bad one throws. Call it after commit, so
+ * ending a match is never rolled back over a payload — except when starting a
+ * match, where a bad problem should block the start itself. */
 function toMatchRoom(match: SelectedMatchRoom): MatchRoom {
 	const readyByUserId = new Map(
 		match.activeMatchSlots.map((slot) => [slot.userId, slot.ready]),
@@ -70,6 +124,12 @@ function toMatchRoom(match: SelectedMatchRoom): MatchRoom {
 		guest: match.guest
 			? { ...match.guest, ready: readyByUserId.get(match.guest.id) ?? false }
 			: null,
+		/** `status`, not `startedAt`: rooms built mid-transaction override only the
+		 * status, and a match cancelled while waiting never started at all. */
+		problem:
+			match.status === "IN_PROGRESS" || match.status === "FINISHED"
+				? toMatchProblem(match.problem)
+				: null,
 	};
 }
 
@@ -85,18 +145,16 @@ function readMatchRoom(
 	});
 }
 
-/** The room payload for callers that have already established the match exists
- * — inside a transaction that just wrote to it. */
-async function matchRoomOrThrow(
+/** For callers that have already established the match exists — inside a
+ * transaction that just wrote to it. */
+function readMatchRoomOrThrow(
 	matchId: string,
-	client: Prisma.TransactionClient = prisma,
-): Promise<MatchRoom> {
-	return toMatchRoom(
-		await client.match.findUniqueOrThrow({
-			where: { id: matchId },
-			select: matchRoomSelect,
-		}),
-	);
+	client: Prisma.TransactionClient,
+): Promise<SelectedMatchRoom> {
+	return client.match.findUniqueOrThrow({
+		where: { id: matchId },
+		select: matchRoomSelect,
+	});
 }
 
 const ALREADY_IN_MATCH = "You are already in a match";
@@ -172,9 +230,19 @@ export async function listOpenMatches(): Promise<LobbyMatch[]> {
 }
 
 export async function createMatch(hostId: string): Promise<LobbyMatch> {
+	const problemIds = await prisma.problem.findMany({ select: { id: true } });
+	const problem = problemIds[Math.floor(Math.random() * problemIds.length)];
+	if (!problem) {
+		throw new AppError("internal", "No problems are available to play");
+	}
+
 	try {
 		const match = await prisma.match.create({
-			data: { hostId, activeMatchSlots: { create: { userId: hostId } } },
+			data: {
+				hostId,
+				problemId: problem.id,
+				activeMatchSlots: { create: { userId: hostId } },
+			},
 			select: lobbyMatchSelect,
 		});
 
@@ -192,7 +260,7 @@ export async function joinMatch(
 	userId: string,
 ): Promise<MatchRoom> {
 	try {
-		return await withMatchLock(matchId, async (tx) => {
+		const match = await withMatchLock(matchId, async (tx) => {
 			await tx.match.update({
 				where: {
 					id: matchId,
@@ -210,8 +278,10 @@ export async function joinMatch(
 			});
 			await tx.activeMatchSlot.create({ data: { matchId, userId } });
 
-			return matchRoomOrThrow(matchId, tx);
+			return readMatchRoomOrThrow(matchId, tx);
 		});
+
+		return toMatchRoom(match);
 	} catch (error) {
 		if (isRecordNotFound(error)) {
 			await explainWriteFailure(matchId, userId, "join");
@@ -228,7 +298,7 @@ export async function cancelMatch(
 	userId: string,
 ): Promise<MatchRoom> {
 	try {
-		return await withMatchLock(matchId, async (tx) => {
+		const match = await withMatchLock(matchId, async (tx) => {
 			// `guestId: null` keeps this to matches the lobby actually lists: once
 			// someone has joined, only leaving the room cancels the match, so a
 			// guest can never be dropped without their room hearing about it.
@@ -244,8 +314,10 @@ export async function cancelMatch(
 
 			await tx.activeMatchSlot.deleteMany({ where: { matchId } });
 
-			return matchRoomOrThrow(matchId, tx);
+			return readMatchRoomOrThrow(matchId, tx);
 		});
+
+		return toMatchRoom(match);
 	} catch (error) {
 		if (isRecordNotFound(error)) {
 			await explainWriteFailure(matchId, userId, "cancel");
@@ -318,6 +390,8 @@ export async function setReady(
 				data: { status: "IN_PROGRESS", startedAt, endsAt },
 			});
 
+			/** Inside the transaction on purpose: this parses the problem, so a bad
+			 * one rolls the start back to WAITING instead of half-starting it. */
 			return toMatchRoom({
 				...match,
 				status: "IN_PROGRESS",
@@ -333,30 +407,34 @@ export async function setReady(
 	}
 }
 
-export type MatchRoomLeaveResult =
+/** Generic over the room so the transaction can return the raw row and the
+ * payload is built only after commit. */
+type LeaveOutcome<Room> =
 	| {
 			event: "cancelled";
 			matchId: string;
 			/** `null` when a cancelled match never had a guest — there is no one left
 			 * in the room to tell, only the lobby listing to clear. */
-			room: MatchRoom | null;
+			room: Room | null;
 	  }
 	| {
 			event: "reopened";
 			matchId: string;
-			room: MatchRoom;
+			room: Room;
 			lobbyMatch: LobbyMatch;
 	  }
 	| {
 			event: "forfeited";
 			matchId: string;
-			room: MatchRoom;
+			room: Room;
 	  };
+
+export type MatchRoomLeaveResult = LeaveOutcome<MatchRoom>;
 
 async function cancelAsHost(
 	tx: Prisma.TransactionClient,
 	match: SelectedMatchRoom,
-): Promise<MatchRoomLeaveResult> {
+): Promise<LeaveOutcome<SelectedMatchRoom>> {
 	await tx.match.update({
 		where: { id: match.id },
 		data: { status: "CANCELLED", endedAt: new Date() },
@@ -367,7 +445,7 @@ async function cancelAsHost(
 		event: "cancelled",
 		matchId: match.id,
 		room: match.guestId
-			? toMatchRoom({ ...match, status: "CANCELLED", activeMatchSlots: [] })
+			? { ...match, status: "CANCELLED", activeMatchSlots: [] }
 			: null,
 	};
 }
@@ -376,7 +454,7 @@ async function releaseGuestSlot(
 	tx: Prisma.TransactionClient,
 	match: SelectedMatchRoom,
 	guestId: string,
-): Promise<MatchRoomLeaveResult> {
+): Promise<LeaveOutcome<SelectedMatchRoom>> {
 	await tx.activeMatchSlot.delete({ where: { userId: guestId } });
 	await tx.activeMatchSlot.updateMany({
 		where: { matchId: match.id },
@@ -390,12 +468,12 @@ async function releaseGuestSlot(
 	return {
 		event: "reopened",
 		matchId: match.id,
-		room: toMatchRoom({
+		room: {
 			...match,
 			guestId: null,
 			guest: null,
 			activeMatchSlots: [{ userId: match.hostId, ready: false }],
-		}),
+		},
 		lobbyMatch: toLobbyMatch(match),
 	};
 }
@@ -404,7 +482,7 @@ async function forfeitAsPlayer(
 	tx: Prisma.TransactionClient,
 	match: SelectedMatchRoom,
 	winnerId: string,
-): Promise<MatchRoomLeaveResult> {
+): Promise<LeaveOutcome<SelectedMatchRoom>> {
 	await tx.match.update({
 		where: { id: match.id },
 		data: { status: "FINISHED", endedAt: new Date(), winnerId },
@@ -414,12 +492,12 @@ async function forfeitAsPlayer(
 	return {
 		event: "forfeited",
 		matchId: match.id,
-		room: toMatchRoom({
+		room: {
 			...match,
 			status: "FINISHED",
 			winnerId,
 			activeMatchSlots: [],
-		}),
+		},
 	};
 }
 
@@ -432,7 +510,7 @@ export async function leaveMatchRoom(
 	userId: string,
 	matchId: string,
 ): Promise<MatchRoomLeaveResult | null> {
-	return withMatchLock(matchId, async (tx) => {
+	const outcome = await withMatchLock(matchId, async (tx) => {
 		const match = await readMatchRoom(matchId, tx);
 		if (!match?.activeMatchSlots.some((slot) => slot.userId === userId)) {
 			return null;
@@ -454,11 +532,19 @@ export async function leaveMatchRoom(
 			? releaseGuestSlot(tx, match, userId)
 			: null;
 	});
+
+	if (!outcome) {
+		return null;
+	}
+	if (outcome.event === "cancelled") {
+		return { ...outcome, room: outcome.room && toMatchRoom(outcome.room) };
+	}
+	return { ...outcome, room: toMatchRoom(outcome.room) };
 }
 
 /** `null` when another caller already finished the match. */
 export async function finishMatch(matchId: string): Promise<MatchRoom | null> {
-	return withMatchLock(matchId, async (tx) => {
+	const match = await withMatchLock(matchId, async (tx) => {
 		const { count } = await tx.match.updateMany({
 			where: { id: matchId, status: "IN_PROGRESS" },
 			data: { status: "FINISHED", endedAt: new Date() },
@@ -469,8 +555,10 @@ export async function finishMatch(matchId: string): Promise<MatchRoom | null> {
 
 		await tx.activeMatchSlot.deleteMany({ where: { matchId } });
 
-		return matchRoomOrThrow(matchId, tx);
+		return readMatchRoomOrThrow(matchId, tx);
 	});
+
+	return match && toMatchRoom(match);
 }
 
 type RunningMatch = { id: string; endsAt: Date };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { matchProblemSchema } from "./problem.schemas";
 
 /** Mirrors Prisma's `MatchStatus` — kept as a literal union here so `shared`
  * never depends on the generated Prisma client. */
@@ -35,6 +36,8 @@ export const matchRoomSchema = z
 			.string()
 			.nullable()
 			.meta({ example: "clx9z8y7x6w5v4u3t2s1r0q" }),
+		/** `null` until the match starts, so neither player can read it early. */
+		problem: matchProblemSchema.nullable(),
 	})
 	.meta({
 		id: "MatchRoom",
