@@ -8,7 +8,7 @@ import {
 import type { Request, Response } from "express";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
-import { serialize } from "../../lib/serialize";
+import { parseOrThrow } from "../../lib/validation";
 import { requireUserId } from "../../middlewares/auth.middleware";
 import {
 	oauthStateCookieMaxAge,
@@ -49,21 +49,27 @@ export async function githubCallback(req: Request, res: Response) {
 
 	const { refreshToken, ...response } = await AuthService.loginWithGithub(code);
 	setRefreshTokenCookie(res, refreshToken);
-	res.json(serialize(authResponseSchema, response));
+	res.json(
+		parseOrThrow(authResponseSchema, response, "githubCallback response"),
+	);
 }
 
 export async function register(req: Request, res: Response) {
 	const data = registerSchema.parse(req.body);
 	const { refreshToken, ...response } = await AuthService.registerUser(data);
 	setRefreshTokenCookie(res, refreshToken);
-	res.status(201).json(serialize(authResponseSchema, response));
+	res
+		.status(201)
+		.json(parseOrThrow(authResponseSchema, response, "register response"));
 }
 
 export async function login(req: Request, res: Response) {
 	const data = loginSchema.parse(req.body);
 	const { refreshToken, ...response } = await AuthService.loginUser(data);
 	setRefreshTokenCookie(res, refreshToken);
-	res.status(200).json(serialize(authResponseSchema, response));
+	res
+		.status(200)
+		.json(parseOrThrow(authResponseSchema, response, "login response"));
 }
 
 export async function refresh(req: Request, res: Response) {
@@ -76,7 +82,7 @@ export async function refresh(req: Request, res: Response) {
 	const { refreshToken: newRefreshToken, ...response } =
 		await AuthService.refreshToken(refreshToken);
 	setRefreshTokenCookie(res, newRefreshToken);
-	res.json(serialize(authResponseSchema, response));
+	res.json(parseOrThrow(authResponseSchema, response, "refresh response"));
 }
 
 export async function logout(req: Request, res: Response) {
@@ -97,5 +103,5 @@ export async function logout(req: Request, res: Response) {
 export async function me(req: Request, res: Response) {
 	const userData = await AuthService.getCurrentUser(requireUserId(req));
 
-	res.json(serialize(meResponseSchema, userData));
+	res.json(parseOrThrow(meResponseSchema, userData, "me response"));
 }

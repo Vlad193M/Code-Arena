@@ -1,12 +1,13 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-code: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 :root {
@@ -129,32 +130,43 @@ body::after {
   mask-image: radial-gradient(circle at 50% 30%, black, transparent 78%);
 }
 
-a {
-  color: var(--lagoon-deep);
-  text-decoration-color: rgba(50, 143, 151, 0.4);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
+@layer base {
+  a {
+    color: var(--lagoon-deep);
+    text-decoration-color: rgba(50, 143, 151, 0.4);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
 
-a:hover {
-  color: #246f76;
-}
+  a:hover {
+    color: #246f76;
+  }
 
-code {
-  font-size: 0.9em;
-  border: 1px solid var(--line);
-  background: color-mix(in oklab, var(--surface-strong) 82%, white 18%);
-  border-radius: 7px;
-  padding: 2px 7px;
-}
+  .crt a {
+    color: var(--crt-amber);
+    text-decoration: none;
+  }
 
-pre code {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-  font-size: inherit;
-  color: inherit;
+  .crt a:hover {
+    color: var(--crt-amber-bright);
+  }
+
+  code {
+    font-size: 0.9em;
+    border: 1px solid var(--line);
+    background: color-mix(in oklab, var(--surface-strong) 82%, white 18%);
+    border-radius: 7px;
+    padding: 2px 7px;
+  }
+
+  pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    color: inherit;
+  }
 }
 
 .page-wrap {
@@ -189,11 +201,13 @@ pre code {
   border-color: color-mix(in oklab, var(--lagoon-deep) 35%, var(--line));
 }
 
-button,
-.island-shell,
-a {
-  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease,
-    transform 180ms ease;
+@layer base {
+  button,
+  .island-shell,
+  a {
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease,
+      transform 180ms ease;
+  }
 }
 
 .island-kicker {
@@ -271,6 +285,10 @@ a {
   --crt-dim: #7a5c38;
   --crt-green: #33ff66;
   --crt-red: #ff4444;
+  --crt-prose: #f1d9a8;
+  --crt-code: #e4e0d6;
+  --crt-well: #12110d;
+  --crt-ink: #14130f;
 
   color: var(--crt-amber);
   color-scheme: dark;
@@ -278,15 +296,6 @@ a {
 
 .crt ::placeholder {
   color: var(--crt-dim);
-}
-
-.crt a {
-  color: var(--crt-amber);
-  text-decoration: none;
-}
-
-.crt a:hover {
-  color: var(--crt-amber-bright);
 }
 
 .crt-scanlines {
