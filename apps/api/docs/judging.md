@@ -59,32 +59,34 @@ started). It arrives in the same `match:room` broadcast that moves the match to
 `IN_PROGRESS`, so both players get it at the same moment, and a reconnect gets
 it back from the room like any other state.
 
-## Running one test case (planned: COD-34 / COD-35)
+## Running one test case (planned: COD-35)
 
 The player writes only the function. Before running, the judge appends a
 hidden per-language wrapper that reads the JSON argument list from stdin, calls
-the function, and prints the JSON-encoded result after a marker:
+the function, and prints the JSON-encoded result after a marker. The code runs
+through the execution engine (COD-34, see [execution.md](execution.md)). For
+JavaScript the sandbox has no file system, so stdin arrives as the `__stdin`
+string and `console.log` writes to the captured stdout:
 
 ```js
 // player's code above
-const __args = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const __args = JSON.parse(__stdin);
 const __result = twoSum(...__args);
 console.log("__CODEARENA_RESULT__" + JSON.stringify(__result));
 ```
 
 stdin/stdout is only the transport: it keeps problems and test cases
-language-neutral, so adding a language means one wrapper and one run command,
-not new test data. The marker lets players log debug output freely.
+language-neutral, so adding a language means one wrapper and one way to run
+it, not new test data. The marker lets players log debug output freely.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant J as Judge
-    participant P as Sandboxed process<br/>(player code + wrapper)
+    participant P as Execution engine<br/>(player code + wrapper)
 
-    J->>P: start with time and memory limits
-    J->>P: stdin: JSON argument list
-    alt finishes within limits
+    J->>P: code, stdin (JSON argument list), time and memory limits
+    alt status success
         P-->>J: stdout: debug logs + marker line with JSON result
         J->>J: take the last marker line, parse JSON
         alt parsed value deep-equals expectedOutput
@@ -92,11 +94,11 @@ sequenceDiagram
         else different value, missing marker, or unparsable
             Note over J: WRONG_ANSWER
         end
-    else exits with a non-zero code
+    else status runtime_error
         Note over J: RUNTIME_ERROR
-    else killed at the time limit
+    else status timeout
         Note over J: TIME_LIMIT_EXCEEDED
-    else killed at the memory limit
+    else status oom
         Note over J: MEMORY_LIMIT_EXCEEDED
     end
 ```

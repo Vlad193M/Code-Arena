@@ -6,4 +6,5 @@ allowBuilds:
   '@scarf/scarf': false
   bcrypt: true
   esbuild: true
+  isolated-vm: true
   prisma: true
