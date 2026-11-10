@@ -3,10 +3,11 @@ import { z } from "zod";
 export const MAX_STDOUT_LENGTH = 64 * 1024;
 export const MAX_ERROR_LENGTH = 4 * 1024;
 export const OUTPUT_LIMIT_ERROR = "Output limit exceeded";
+export const MAX_CODE_LENGTH = 100_000;
 
 export const executionRequestSchema = z.object({
 	language: z.literal("javascript"),
-	code: z.string().max(100_000),
+	code: z.string().max(MAX_CODE_LENGTH),
 	stdin: z.string().max(1_000_000),
 	limits: z.object({
 		timeMs: z.number().int().positive().max(10_000),

@@ -9,6 +9,7 @@ import { authRouter } from "./modules/auth/auth.routes";
 import { docsRouter } from "./modules/docs/docs.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { matchRouter } from "./modules/match/match.routes";
+import { submissionRouter } from "./modules/submission/submission.routes";
 
 export const app: Application = express();
 
@@ -31,6 +32,7 @@ app.use(cookieParser());
 app.use("/api", healthRouter);
 app.use("/api", docsRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/matches/:id/submissions", submissionRouter);
 app.use("/api/matches", matchRouter);
 
 app.use(errorMiddleware);

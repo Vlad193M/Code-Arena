@@ -162,7 +162,7 @@ const NOT_A_PARTICIPANT = "You are not a participant in this match";
 
 /** The one place the host-or-guest rule is stated, so the two public readers
  * and their error kinds cannot drift. */
-function assertIsParticipant<
+export function assertIsParticipant<
 	T extends { hostId: string; guestId: string | null },
 >(match: T | null, userId: string): asserts match is T {
 	if (!match) {
