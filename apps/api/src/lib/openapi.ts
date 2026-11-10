@@ -2,6 +2,7 @@ import { createDocument } from "zod-openapi";
 import { authPaths } from "../modules/auth/auth.openapi";
 import { healthPaths } from "../modules/health/health.openapi";
 import { matchPaths } from "../modules/match/match.openapi";
+import { submissionPaths } from "../modules/submission/submission.openapi";
 import { errorResponseComponents } from "./openapi-helpers";
 
 export const openApiDocument: ReturnType<typeof createDocument> =
@@ -16,6 +17,7 @@ export const openApiDocument: ReturnType<typeof createDocument> =
 		tags: [
 			{ name: "auth", description: "Authentication and session management" },
 			{ name: "match", description: "Match lobby and lifecycle" },
+			{ name: "submission", description: "Judging submitted code" },
 			{ name: "health", description: "Service health" },
 		],
 		components: {
@@ -28,5 +30,6 @@ export const openApiDocument: ReturnType<typeof createDocument> =
 			...healthPaths,
 			...authPaths,
 			...matchPaths,
+			...submissionPaths,
 		},
 	});

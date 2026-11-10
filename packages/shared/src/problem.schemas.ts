@@ -30,6 +30,9 @@ const valueSchemas = {
 	"int[][]": z.array(z.array(intSchema)),
 } satisfies Record<ValueType, z.ZodType>;
 
+export const valueSchema = <T extends ValueType>(type: T) => valueSchemas[type];
+export type Value = z.infer<(typeof valueSchemas)[ValueType]>;
+
 /** Names end up interpolated into executed wrapper code and generated starter
  * code, so anything beyond a plain identifier is rejected. */
 const identifierSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
@@ -52,6 +55,11 @@ export const problemSignatureSchema = z
 	});
 export type ProblemSignature = z.infer<typeof problemSignatureSchema>;
 
+export const testCaseExampleSchema = z.object({
+	input: z.array(z.json()).meta({ example: [[2, 7, 11, 15], 9] }),
+	expectedOutput: z.json().meta({ example: [0, 1] }),
+});
+
 /** Visible test cases only, as examples: hidden cases and anything that
  * identifies a test case stay server-side. */
 export const matchProblemSchema = z
@@ -62,12 +70,7 @@ export const matchProblemSchema = z
 		timeLimitMs: z.number().int().meta({ example: 1000 }),
 		memoryLimitMb: z.number().int().meta({ example: 128 }),
 		signature: problemSignatureSchema,
-		examples: z.array(
-			z.object({
-				input: z.array(z.json()).meta({ example: [[2, 7, 11, 15], 9] }),
-				expectedOutput: z.json().meta({ example: [0, 1] }),
-			}),
-		),
+		examples: z.array(testCaseExampleSchema),
 	})
 	.meta({
 		id: "MatchProblem",
@@ -76,13 +79,13 @@ export const matchProblemSchema = z
 export type MatchProblem = z.infer<typeof matchProblemSchema>;
 
 export function testCaseDataSchema(signature: ProblemSignature) {
-	const [first, ...rest] = signature.params.map((p) => valueSchemas[p.type]);
+	const [first, ...rest] = signature.params.map((p) => valueSchema(p.type));
 	if (!first) {
 		throw new Error("A signature must declare at least one parameter");
 	}
 
 	return z.object({
 		input: z.tuple([first, ...rest]),
-		expectedOutput: valueSchemas[signature.returnType],
+		expectedOutput: valueSchema(signature.returnType),
 	});
 }

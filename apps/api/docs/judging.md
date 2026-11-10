@@ -59,7 +59,13 @@ started). It arrives in the same `match:room` broadcast that moves the match to
 `IN_PROGRESS`, so both players get it at the same moment, and a reconnect gets
 it back from the room like any other state.
 
-## Running one test case (planned: COD-35)
+## Running one test case (COD-35)
+
+- Code: `src/modules/submission/` — `javascript.wrapper.ts` builds the wrapped
+  code, `submission.judge.ts` decodes, compares, and picks verdicts,
+  `submission.service.ts` runs every case and stores the submission
+- Endpoint: `POST /api/matches/{id}/submissions` with `{ code }`
+- Tests: `submission.judge.test.ts`
 
 The player writes only the function. Before running, the judge appends a
 hidden per-language wrapper that reads the JSON argument list from stdin, calls
@@ -109,10 +115,49 @@ sequenceDiagram
   equality, so whitespace and formatting never matter.
 - Array order matters. A problem whose answer has no natural order must say in
   its statement which order to return (e.g. "indices in increasing order").
-- `float` results need an absolute/relative tolerance instead of exact
-  equality; the exact epsilon is decided when the first `float` problem lands.
+- The decoded value must fit the signature's return type; anything else is
+  `WRONG_ANSWER`.
+- A `float` result passes when `|actual - expected| <= 1e-6 * max(1, |expected|)`:
+  an absolute tolerance near zero, a relative one for large values. Every
+  other type must be exactly equal.
 - A function that returns nothing is `WRONG_ANSWER`: in JS `undefined` yields
   no valid JSON, and Python's `None` becomes `null`, which no allowed type
   accepts.
 - Every test case is run, even after a failure, so the result can report how
   many passed out of the total.
+
+## Judging a submission
+
+1. The caller must be a player in the match, and the match must be
+   `IN_PROGRESS`.
+2. Every test case, hidden ones included, runs in `order`, one at a time,
+   with the problem's time and memory limits.
+3. The submission's verdict is the verdict of its first failed case, or
+   `ACCEPTED` when all of them pass. `passed` counts the accepted cases.
+4. The `Submission` row stores the code, verdict, `passed`, and `total`.
+   Per-case results are only returned, not stored.
+
+The response lists a result for every case. A visible case carries its
+input, expected output, decoded output, runtime error, and duration. A hidden
+case carries only its verdict. The player's code controls everything else that
+comes from running it, so any of it could carry the input out: output and error
+text directly, and duration as a timing channel (the code can spin for
+`nums[0]` milliseconds). Hidden cases are the same in every match, so a case
+leaked once could be hardcoded in every later match on that problem. The
+verdict itself still leaks about two bits per case per submission; that is
+unavoidable and too slow to matter.
+
+## Known limitations
+
+- **Debug output shares the 64 KB stdout limit with the result.** The wrapper
+  prints the result last, through the same `console.log`. If the player's own
+  logs have used up the limit, printing the result throws
+  `Output limit exceeded` and a correct solution gets `RUNTIME_ERROR`. One
+  `console.log(nums)` on a large input (10⁴ numbers) is enough. A visible case
+  shows the error text; a hidden one shows only the verdict. A fix would give
+  the wrapper its own result channel in the engine instead of stdout, which
+  would also remove the marker.
+- **A submission can outlive its match.** The match status is checked once,
+  before the cases run. A submission started just before `endsAt` is still
+  judged and stored after the match is `FINISHED`. Deciding the winner
+  (COD-37) must decide which submissions count.
