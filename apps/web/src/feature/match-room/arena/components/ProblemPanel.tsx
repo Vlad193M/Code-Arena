@@ -1,19 +1,11 @@
-import type {
-	Difficulty,
-	MatchProblem,
-	ProblemSignature,
-} from "@codearena/shared";
-import { memo, useState } from "react";
+import type { MatchProblem, ProblemSignature } from "@codearena/shared";
 import Markdown, { type Components } from "react-markdown";
+import { formatArguments, formatValue } from "../../formatValues";
 
 type ProblemPanelProps = {
 	problem: MatchProblem;
-};
-
-const DIFFICULTY_TONE: Record<Difficulty, string> = {
-	EASY: "border-(--crt-green)/55 text-(--crt-green)",
-	MEDIUM: "border-(--crt-amber)/55 text-(--crt-amber)",
-	HARD: "border-(--crt-red)/55 text-(--crt-red)",
+	open: boolean;
+	onToggle: () => void;
 };
 
 const KEY = "text-(--crt-dim)";
@@ -86,60 +78,42 @@ function formatSignature({
 	return `${functionName}(${args}) → ${returnType}`;
 }
 
-function formatArguments(
-	signature: ProblemSignature,
-	input: MatchProblem["examples"][number]["input"],
-) {
-	return signature.params
-		.map((param, index) => `${param.name} = ${JSON.stringify(input[index])}`)
-		.join(", ");
-}
-
-/** Memoized: the match countdown re-renders the room 4× a second, and the
- * statement's Markdown would be re-parsed on every tick. */
-export default memo(function ProblemPanel({ problem }: ProblemPanelProps) {
-	const [open, setOpen] = useState(true);
-
+export default function ProblemPanel({
+	problem,
+	open,
+	onToggle,
+}: ProblemPanelProps) {
 	if (!open) {
 		return (
 			<button
 				type="button"
-				onClick={() => setOpen(true)}
+				onClick={onToggle}
 				title="Show problem"
-				className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2.5 border border-(--crt-amber)/55 bg-(--crt-amber)/4 py-3 font-[inherit] text-xs tracking-[0.14em] text-(--crt-amber) hover:bg-(--crt-amber)/10"
+				className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2.5 border border-(--crt-amber)/55 bg-(--crt-amber)/4 py-3 font-[inherit] text-xs tracking-[0.14em] text-(--crt-amber) hover:bg-(--crt-amber)/10 xl:min-h-80 xl:flex-col"
 			>
-				<span>▼</span>
-				<span>PROBLEM</span>
+				<span className="xl:hidden">▼</span>
+				<span className="hidden xl:inline">▶</span>
+				<span className="xl:[writing-mode:vertical-rl]">PROBLEM</span>
 			</button>
 		);
 	}
 
 	return (
-		<div className="flex flex-col border border-(--crt-amber)/55 bg-[linear-gradient(180deg,rgba(255,176,0,0.035),rgba(255,176,0,0.01))]">
+		<div className="flex flex-col border border-(--crt-amber)/55 bg-[linear-gradient(180deg,rgba(255,176,0,0.035),rgba(255,176,0,0.01))] xl:max-h-[calc(100vh-32px)]">
 			<div className="flex items-center justify-between gap-2.5 border-b border-(--crt-dim)/50 pl-3.5 text-[11.5px] tracking-[0.12em] text-(--crt-dim)">
 				<span>PROBLEM</span>
 				<button
 					type="button"
-					onClick={() => setOpen(false)}
+					onClick={onToggle}
 					title="Collapse"
 					className="min-h-9 min-w-10 cursor-pointer border-0 border-l border-(--crt-dim)/50 bg-transparent font-[inherit] text-[13px] text-(--crt-dim) hover:text-(--crt-amber)"
 				>
-					▲
+					<span className="xl:hidden">▲</span>
+					<span className="hidden xl:inline">◀</span>
 				</button>
 			</div>
 
-			<div className="flex flex-col gap-4.5 p-4">
-				<div className="flex flex-wrap items-center gap-3">
-					<span className="crt-glow text-[clamp(15px,1.7vw,19px)] font-semibold tracking-[0.02em]">
-						{problem.title}
-					</span>
-					<span
-						className={`border px-2 py-0.5 text-[11.5px] tracking-[0.12em] ${DIFFICULTY_TONE[problem.difficulty]}`}
-					>
-						{problem.difficulty}
-					</span>
-				</div>
-
+			<div className="flex flex-col gap-4.5 overflow-y-auto p-4">
 				<div className="flex flex-col gap-2.5 text-[13.5px] leading-[1.7] text-pretty text-(--crt-prose)">
 					<Markdown components={STATEMENT_COMPONENTS}>
 						{problem.statement}
@@ -160,7 +134,7 @@ export default memo(function ProblemPanel({ problem }: ProblemPanelProps) {
 							</span>{" "}
 							<span className={KEY}>→</span>{" "}
 							<span className={VALUE}>
-								{JSON.stringify(example.expectedOutput)}
+								{formatValue(example.expectedOutput)}
 							</span>
 						</div>
 					))}
@@ -180,4 +154,4 @@ export default memo(function ProblemPanel({ problem }: ProblemPanelProps) {
 			</div>
 		</div>
 	);
-});
+}
