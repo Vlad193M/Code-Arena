@@ -9,10 +9,13 @@ export const Route = createFileRoute("/match/$id")({
 	component: MatchRoomPage,
 });
 
-/** Identity comes from the route, so the match-room feature never imports auth. */
+/** Identity comes from the route, so the match-room feature never imports auth.
+ * Keyed by match: moving to another match starts every piece of state afresh. */
 function MatchRoomPage() {
 	const { id } = Route.useParams();
 	const { user } = useAuth();
 
-	return <MatchRoomScreen matchId={id} currentUserId={user?.id ?? ""} />;
+	return (
+		<MatchRoomScreen key={id} matchId={id} currentUserId={user?.id ?? ""} />
+	);
 }

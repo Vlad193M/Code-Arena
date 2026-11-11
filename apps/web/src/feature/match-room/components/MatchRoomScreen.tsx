@@ -1,9 +1,11 @@
 import { useNavigate } from "@tanstack/react-router";
+import LoadingText from "#/ui/LoadingText";
 import TerminalAlert from "#/ui/TerminalAlert";
-import { formatCountdown, useCountdown } from "../useCountdown";
+import ArenaScreen from "../arena/components/ArenaScreen";
 import { useMatchRoom } from "../useMatchRoom";
+import BackToLobbyButton, { GHOST_BUTTON } from "./BackToLobbyButton";
+import CountdownText from "./CountdownText";
 import PlayerCard from "./PlayerCard";
-import ProblemPanel from "./ProblemPanel";
 
 type MatchRoomScreenProps = {
 	matchId: string;
@@ -11,9 +13,6 @@ type MatchRoomScreenProps = {
 };
 
 const RULE = "─".repeat(200);
-
-const GHOST_BUTTON =
-	"min-h-[52px] cursor-pointer border border-(--crt-dim) px-4.5 font-[inherit] text-[13px] tracking-[0.08em] text-(--crt-dim) transition-colors duration-120";
 
 function CrtBackdrop({ children }: { children: React.ReactNode }) {
 	return (
@@ -24,20 +23,6 @@ function CrtBackdrop({ children }: { children: React.ReactNode }) {
 				{children}
 			</div>
 		</div>
-	);
-}
-
-function BackToLobbyButton() {
-	const navigate = useNavigate();
-
-	return (
-		<button
-			type="button"
-			onClick={() => navigate({ to: "/lobby" })}
-			className={`${GHOST_BUTTON} hover:border-(--crt-amber) hover:text-(--crt-amber)`}
-		>
-			[ BACK TO LOBBY ]
-		</button>
 	);
 }
 
@@ -55,19 +40,6 @@ export default function MatchRoomScreen({
 		setReady,
 		leave,
 	} = useMatchRoom(matchId);
-	const remainingMs = useCountdown(
-		room?.status === "IN_PROGRESS" ? deadline : null,
-	);
-
-	const isHost = room?.host.id === currentUserId;
-	const opponent = isHost ? room?.guest : room?.host;
-	const opponentPresence = opponent ? presenceByUserId[opponent.id] : undefined;
-	const opponentDropped =
-		opponentPresence?.status === "disconnected" &&
-		(room?.status === "WAITING" || room?.status === "IN_PROGRESS")
-			? opponentPresence
-			: null;
-	const graceRemainingMs = useCountdown(opponentDropped?.graceDeadline ?? null);
 
 	function handleLeave() {
 		leave();
@@ -90,19 +62,41 @@ export default function MatchRoomScreen({
 		return (
 			<CrtBackdrop>
 				<span>
-					ESTABLISHING LINK
-					<span className="crt-ellipsis" />
+					<LoadingText label="ESTABLISHING LINK" />
 				</span>
 			</CrtBackdrop>
 		);
 	}
 
+	const isHost = room.host.id === currentUserId;
 	const mine = isHost ? room.host : room.guest;
-	const inProgress = room.status === "IN_PROGRESS";
-	const cancelled = room.status === "CANCELLED";
-	const finished = room.status === "FINISHED";
-	const won = room.winnerId === currentUserId;
+	const opponent = isHost ? room.guest : room.host;
+	const opponentPresence = opponent ? presenceByUserId[opponent.id] : undefined;
 	const roomCode = room.id.slice(0, 6).toUpperCase();
+
+	/** The server reveals the problem exactly when the match starts, so a room
+	 * with one is in progress or finished. */
+	if (room.problem) {
+		return (
+			<ArenaScreen
+				room={room}
+				problem={room.problem}
+				roomCode={roomCode}
+				currentUserId={currentUserId}
+				deadline={deadline}
+				opponent={opponent}
+				opponentPresence={opponentPresence}
+				opponentLeft={opponentLeft}
+				error={error}
+			/>
+		);
+	}
+
+	const cancelled = room.status === "CANCELLED";
+	const opponentDropped =
+		opponentPresence?.status === "disconnected" && room.status === "WAITING"
+			? opponentPresence
+			: null;
 
 	return (
 		<div className="crt relative min-h-screen overflow-hidden bg-(--crt-bg) font-mono">
@@ -151,8 +145,7 @@ export default function MatchRoomScreen({
 											SLOT 2 — CHALLENGER
 										</div>
 										<div className="text-sm tracking-[0.04em] text-(--crt-dim)">
-											WAITING FOR OPPONENT
-											<span className="crt-ellipsis" />
+											<LoadingText label="WAITING FOR OPPONENT" />
 										</div>
 										<div className="text-xs text-(--crt-dim)">
 											{cancelled
@@ -174,43 +167,22 @@ export default function MatchRoomScreen({
 							) : opponentDropped ? (
 								<TerminalAlert tone="error">
 									{"> "}OPPONENT DISCONNECTED — waiting{" "}
-									{graceRemainingMs === null
-										? ""
-										: `${formatCountdown(graceRemainingMs)} `}
+									{opponentDropped.graceDeadline === null ? null : (
+										<>
+											<CountdownText
+												deadline={opponentDropped.graceDeadline}
+											/>{" "}
+										</>
+									)}
 									for them to reconnect
-									{inProgress ? ", then they forfeit" : ""}
 								</TerminalAlert>
 							) : null}
-
-							{inProgress ? (
-								<div className="flex items-baseline justify-between gap-4 border border-(--crt-green) bg-(--crt-green)/8 px-4.5 py-3.5 text-(--crt-green)">
-									<span className="text-sm tracking-[0.12em]">
-										MATCH IN PROGRESS
-									</span>
-									<span className="text-[28px] font-semibold tabular-nums tracking-[0.08em]">
-										{remainingMs === null
-											? "--:--"
-											: formatCountdown(remainingMs)}
-									</span>
-								</div>
-							) : null}
-
-							{finished ? (
-								<TerminalAlert tone={won ? "success" : "error"}>
-									{"> "}
-									{room.winnerId === null
-										? "TIME'S UP — MATCH OVER"
-										: `MATCH OVER — ${won ? "YOU WIN" : "YOU LOSE"}`}
-								</TerminalAlert>
-							) : null}
-
-							{room.problem ? <ProblemPanel problem={room.problem} /> : null}
 
 							{error ? (
 								<TerminalAlert tone="error">{error}</TerminalAlert>
 							) : null}
 
-							{cancelled || finished ? <BackToLobbyButton /> : null}
+							{cancelled ? <BackToLobbyButton /> : null}
 
 							{mine && room.status === "WAITING" ? (
 								<div className="flex flex-wrap gap-3">
